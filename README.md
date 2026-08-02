@@ -135,8 +135,8 @@ same notes.
 
 ### Checking it actually worked
 
-Tap the small version badge in the bottom-right corner. It reads e.g.
-`v2026-08-03.1 · offline-ready · shell 11/11`, and tapping it opens a
+Open the menu and look at the bottom of the sidebar. It reads e.g.
+`Build 2026-08-03.2 · offline-ready · shell 11/11`, and tapping it opens a
 diagnostics panel (origin, secure context, service worker state, cached files,
 notes cached locally). What the middle field means:
 

@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-03.1';
+const BUILD_ID = '2026-08-03.2';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -1074,14 +1074,19 @@ function toggleDiagnostics() {
   buildDiagnostics().then((t) => { panel.textContent = t + '\n\n(tap to close)'; });
 }
 
-function updateBuildBadge() {
-  const badge = document.getElementById('buildBadge');
+// Lives quietly at the bottom of the sidebar (hidden behind the drawer on
+// mobile) rather than floating over the notes: it is how you confirm a deploy
+// actually landed, and it is the way into the diagnostics panel — but it is
+// not something to look at every day.
+function updateBuildStamp() {
+  const badge = document.getElementById('buildStamp');
+  if (!badge) return;
   let sw;
   if (!window.isSecureContext) sw = 'no-https!';           // SW impossible on this origin
   else if (!('serviceWorker' in navigator)) sw = 'no-sw (untrusted cert?)';
   else if (navigator.serviceWorker.controller) sw = 'offline-ready';
   else sw = 'sw-pending';                                   // registered but not controlling yet (reload once)
-  let text = 'v' + BUILD_ID + ' · ' + sw;
+  let text = 'Build ' + BUILD_ID + ' · ' + sw;
   // "offline-ready" only means a worker is controlling the page — it says
   // nothing about whether the shell is actually IN the cache. Show the real
   // count, because a controlling worker over an empty cache still cannot cold
@@ -1097,7 +1102,7 @@ function checkShellCache() {
   const ch = new MessageChannel();
   ch.port1.onmessage = (e) => {
     SHELL_STATUS = e.data;
-    updateBuildBadge();
+    updateBuildStamp();
     if (e.data && e.data.missing && e.data.missing.length) {
       console.warn('[nk] shell cache incomplete, missing:', e.data.missing);
     }
@@ -1145,8 +1150,7 @@ function warnIfOfflineImpossible() {
 }
 
 async function init() {
-  document.getElementById('buildStamp').textContent = 'Build ' + BUILD_ID;
-  updateBuildBadge();
+  updateBuildStamp();
   applyTheme(localStorage.getItem('nk_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   resetComposer();
 
@@ -1168,16 +1172,16 @@ async function init() {
   // window, which is how the app ends up with no offline shell to launch
   // from next time.
   warnIfOfflineImpossible();
-  document.getElementById('buildBadge').addEventListener('click', toggleDiagnostics);
+  document.getElementById('buildStamp').addEventListener('click', toggleDiagnostics);
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
-      .then(updateBuildBadge)
+      .then(updateBuildStamp)
       // Swallowing this was hiding the most useful sentence available: a proxy
       // CSP, a bad MIME type on sw.js or a scope violation all land here.
-      .catch((e) => { SW_ERROR = (e && e.message) || String(e); updateBuildBadge(); });
-    navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildBadge(); checkShellCache(); });
+      .catch((e) => { SW_ERROR = (e && e.message) || String(e); updateBuildStamp(); });
+    navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildStamp(); checkShellCache(); });
     // "pending" resolves to "offline-ready" shortly after first install
-    setTimeout(() => { updateBuildBadge(); checkShellCache(); }, 3000);
+    setTimeout(() => { updateBuildStamp(); checkShellCache(); }, 3000);
     checkShellCache();
   }
 
