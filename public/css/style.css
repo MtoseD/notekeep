@@ -149,9 +149,12 @@ html[data-theme="dark"] .nav-item.active{ background:var(--surface-2); color:var
 .build-badge{
   position:fixed; right:6px; bottom:6px; z-index:500;
   font-size:10px; color:var(--text-dim); opacity:.45;
-  background:var(--bg); padding:2px 6px; border-radius:6px;
-  pointer-events:none;
+  background:var(--bg); padding:8px 10px; border-radius:6px;
+  /* Tappable on purpose: it opens the offline diagnostics panel. Padding is
+     the tap target — the text itself is far too small to hit on a phone. */
+  cursor:pointer; -webkit-user-select:none; user-select:none;
 }
+.build-badge:active{ opacity:.9; }
 .label-item{
   display:flex; align-items:center; gap:20px; width:100%;
   padding:0 20px; height:40px; border-radius:0 22px 22px 0;
@@ -267,6 +270,18 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
 .note-card:hover .note-footer{ opacity:1; }
 .note-footer .icon-btn{ width:32px; height:32px; }
 .note-footer svg{ width:16px; height:16px; }
+
+.diag-panel{
+  position:fixed; z-index:500;
+  left:8px; right:8px; bottom:calc(8px + env(safe-area-inset-bottom));
+  max-height:70vh; overflow:auto; margin:0;
+  background:var(--surface-2); color:var(--text);
+  border:1px solid var(--border); border-radius:12px;
+  padding:14px; font-size:11px; line-height:1.55;
+  font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space:pre-wrap; word-break:break-word;
+  box-shadow:var(--shadow-lift);
+}
 
 .insecure-banner{
   position:fixed; left:0; right:0; bottom:0; z-index:400;

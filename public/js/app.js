@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-02.2';
+const BUILD_ID = '2026-08-02.3';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -1007,6 +1007,68 @@ function showToast(msg) {
 
 /* ================= Init ================= */
 let SHELL_STATUS = null;
+let SW_ERROR = null;
+
+// Tap the build badge for this. There is no devtools on a phone, and every
+// interesting offline failure (worker never registered, registered but not
+// controlling, controlling but over an empty cache, blocked by a proxy header)
+// looks identical from the outside: "it doesn't open". This prints the
+// difference in one screenshottable panel.
+async function buildDiagnostics() {
+  const L = [];
+  const yn = (v) => (v ? 'yes' : 'NO');
+  L.push('build       ' + BUILD_ID);
+  L.push('origin      ' + window.location.origin);
+  L.push('secure ctx  ' + yn(window.isSecureContext));
+  L.push('online      ' + yn(navigator.onLine));
+  L.push('standalone  ' + yn(window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true));
+
+  if (!('serviceWorker' in navigator)) {
+    L.push('worker      UNSUPPORTED by this browser');
+  } else {
+    L.push('controller  ' + yn(navigator.serviceWorker.controller));
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) L.push('registration NONE');
+      else {
+        L.push('scope       ' + reg.scope);
+        L.push('states      installing=' + yn(reg.installing) + ' waiting=' + yn(reg.waiting) + ' active=' + yn(reg.active));
+      }
+    } catch (e) { L.push('registration lookup failed: ' + e.message); }
+  }
+  if (SW_ERROR) L.push('register err ' + SW_ERROR);
+
+  try {
+    const keys = await caches.keys();
+    L.push('caches      ' + (keys.join(', ') || 'NONE'));
+  } catch (e) { L.push('caches      unavailable: ' + e.message); }
+
+  if (SHELL_STATUS) {
+    L.push('shell       ' + SHELL_STATUS.have + '/' + SHELL_STATUS.total);
+    if (SHELL_STATUS.missing.length) L.push('missing     ' + SHELL_STATUS.missing.join(' '));
+  } else {
+    L.push('shell       no answer from worker');
+  }
+
+  try {
+    const d = await NKDB.get('data');
+    L.push('notes cached ' + (((d || {}).notes) || []).length);
+  } catch (e) { L.push('notes cached read failed: ' + e.message); }
+
+  return L.join('\n');
+}
+
+function toggleDiagnostics() {
+  let panel = document.getElementById('diagPanel');
+  if (panel) { panel.remove(); return; }
+  panel = document.createElement('pre');
+  panel.id = 'diagPanel';
+  panel.className = 'diag-panel';
+  panel.textContent = 'collecting…';
+  panel.addEventListener('click', () => panel.remove());
+  document.body.appendChild(panel);
+  buildDiagnostics().then((t) => { panel.textContent = t + '\n\n(tap to close)'; });
+}
 
 function updateBuildBadge() {
   const badge = document.getElementById('buildBadge');
@@ -1077,8 +1139,13 @@ async function init() {
   // window, which is how the app ends up with no offline shell to launch
   // from next time.
   warnIfInsecureOrigin();
+  document.getElementById('buildBadge').addEventListener('click', toggleDiagnostics);
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').then(updateBuildBadge).catch(updateBuildBadge);
+    navigator.serviceWorker.register('/sw.js')
+      .then(updateBuildBadge)
+      // Swallowing this was hiding the most useful sentence available: a proxy
+      // CSP, a bad MIME type on sw.js or a scope violation all land here.
+      .catch((e) => { SW_ERROR = (e && e.message) || String(e); updateBuildBadge(); });
     navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildBadge(); checkShellCache(); });
     // "pending" resolves to "offline-ready" shortly after first install
     setTimeout(() => { updateBuildBadge(); checkShellCache(); }, 3000);
