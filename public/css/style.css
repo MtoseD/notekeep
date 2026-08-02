@@ -373,6 +373,21 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
 }
 html[data-theme="dark"] .toast{ background:var(--surface-2); color:var(--text); }
 
+/* iOS zooms the page in whenever you focus a text field smaller than 16px, and
+   it never zooms back out when you leave the field — so writing a note left
+   the whole app slightly enlarged until you pinched it back. Lift every
+   focusable field to 16px on touch devices; desktop keeps its own sizing.
+   (Do NOT "fix" this with maximum-scale=1 on the viewport — that disables
+   pinch zoom entirely.) .composer-title is already 16px and .editor-title
+   19px, so neither needs a rule here. */
+@media (pointer: coarse){
+  .searchwrap input,
+  .composer-body,
+  .editor-body,
+  .editor-checklist-row input,
+  .label-popover-create input{ font-size:16px; }
+}
+
 /* ---------- Responsive: mobile sidebar becomes a drawer ---------- */
 @media (max-width:880px){
   .sidebar{

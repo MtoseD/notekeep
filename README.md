@@ -60,7 +60,8 @@ npm install
 npm start
 ```
 
-Visit `http://<your-server-ip>:3077` from any device on your network.
+Visit `http://<your-server-ip>:3077` from any device on your network to check
+it works. **Don't stop here if you want offline support** — see step 4.
 
 **Keep it running permanently** with a process manager, e.g.:
 
@@ -71,39 +72,91 @@ pm2 save
 pm2 startup
 ```
 
-Or with Docker — a minimal `Dockerfile` you can add:
+Or with Docker — the repo ships a `Dockerfile` and a `.dockerignore`:
 
-```Dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install --omit=dev
-COPY . .
-EXPOSE 3077
-CMD ["node", "server.js"]
+```bash
+docker build -t notekeep .
+docker run -d --name notekeep -p 3077:3077 --env-file .env --restart unless-stopped notekeep
 ```
 
-## 4. Install it on your devices
+`docker-compose.truenas.yml` is a reference for deploying on TrueNAS SCALE as
+a Custom App (bind-mount the project folder, no image build required).
 
-Open the NoteKeep URL in a browser, then:
+## 4. Serve it over HTTPS with a certificate your devices trust
+
+**This step is not optional if you want the app to work offline**, and it
+applies even on a LAN-only setup with no internet exposure at all.
+
+Browsers only allow a service worker — the thing that caches the app so it can
+launch with no server reachable — on a *trustworthy* origin. In practice:
+
+| How you open it | Offline works? |
+|---|---|
+| `http://<server-ip>:3077` | **No.** Insecure origin, service workers are blocked outright. |
+| `https://…` with a self-signed / untrusted cert | **No.** Browsers disable service workers on any origin with a certificate warning, and clicking "continue anyway" does *not* re-enable them. |
+| `https://…` with a certificate the device trusts | Yes. |
+
+The middle row is the one that catches people out: everything looks fine while
+you're at home, because online mode needs no service worker — so the problem
+only shows up later, when you're away and the app won't open.
+
+Put NoteKeep behind a reverse proxy (Caddy, nginx, Traefik) on its own
+hostname and give it a real certificate. Two ways that need **no port
+forwarding and no inbound internet access**:
+
+- **Let's Encrypt via a DNS-01 challenge.** Validation happens by writing a
+  TXT record in your DNS zone, so the certificate is issued for a *name* — the
+  server itself never has to be reachable from the internet. Needs a DNS
+  provider with an API token. Caddy and Traefik do this for you; certbot needs
+  the matching DNS plugin.
+- **Your own local CA**, if nothing on your network may talk to the internet.
+  Generate a root certificate, sign one for your hostname, and install the root
+  on each device. On iOS you must *also* enable it under Settings → General →
+  About → Certificate Trust Settings. Tedious per device, but fully offline.
+
+Tailscale is the easy alternative: it issues trusted HTTPS certificates for
+your tailnet hostnames, so you get a valid cert and remote access without
+exposing anything publicly.
+
+## 5. Install it on your devices
+
+Open the **HTTPS** NoteKeep URL from step 4 in a browser, then:
 - **iOS Safari**: Share → Add to Home Screen
 - **Android Chrome**: menu → Install app
 - **macOS/Windows/Linux (Chrome/Edge)**: address bar → install icon
 - **Firefox**: works as a regular tab; installable support varies by platform
 
+Install from the HTTPS address, not a LAN IP — whichever URL you add to the
+home screen is the origin the app is stuck with, and an insecure one can never
+work offline.
+
 Each install talks to the same NoteKeep server, so every device sees the
 same notes.
 
-## 5. Access from outside your home network (optional)
+### Checking it actually worked
 
-If you already have Nextcloud reachable over the internet (via a reverse
-proxy like nginx/Caddy or something like Tailscale/WireGuard), put NoteKeep
-behind the same reverse proxy on its own subdomain, e.g. `notes.yourdomain.com`,
-proxying to `localhost:3077`. Use HTTPS (Let's Encrypt) and set `APP_TOKEN`
-in that case, since the app is then reachable from the open internet.
-Tailscale is the easiest option if you don't want to expose anything publicly
-at all — install it on your server and your devices, and use the Tailscale
-hostname instead of a public domain.
+Tap the small version badge in the bottom-right corner. It reads e.g.
+`v2026-08-03.1 · offline-ready · shell 11/11`, and tapping it opens a
+diagnostics panel (origin, secure context, service worker state, cached files,
+notes cached locally). What the middle field means:
+
+- `offline-ready · shell 11/11` — cached and good. Close the app fully and
+  reopen it with the server unreachable to confirm.
+- `sw-pending` — registered but not in control yet; reload once.
+- `no-sw (untrusted cert?)` — the browser is withholding service workers.
+  Almost always an untrusted certificate; see step 4. (A private browsing
+  window does the same thing.)
+- `no-https!` — you opened it over `http://`. See step 4.
+- `shell 4/11` or similar — the cache is incomplete; reload once with the
+  server reachable and it will top itself up.
+
+## 6. Remote access (optional)
+
+If you want NoteKeep from outside your network, the safe options are a VPN
+(WireGuard, Tailscale) or your existing reverse proxy on its own subdomain
+proxying to `localhost:3077`. If you do expose it to the open internet, set
+`APP_TOKEN` to a long random string — otherwise anyone who finds the URL can
+read and write your notes.
 
 ## Data format
 
@@ -118,7 +171,8 @@ backs it up like any other file) or inspect/migrate later:
       "id": "...", "type": "text | checklist", "title": "...", "body": "...",
       "items": [{ "id": "...", "text": "...", "checked": false }],
       "color": "default | coral | peach | ...", "pinned": false,
-      "archived": false, "trashed": false, "labels": ["labelId"],
+      "archived": false, "trashed": false, "trashedAt": null,
+      "labels": ["labelId"],
       "order": 10, "createdAt": 0, "updatedAt": 0
     }
   ],
@@ -130,9 +184,10 @@ backs it up like any other file) or inspect/migrate later:
 
 - Local edits save instantly to the device (IndexedDB) and are pushed to
   Nextcloud ~1.2 seconds after you stop typing.
-  device.
 - The app pulls fresh data every 20 seconds while open, plus immediately on
   opening, on reconnecting to the network, and when you tap the sync icon.
+- With no server reachable the app still opens, and every edit is kept locally
+  and pushed the next time it can reach Nextcloud.
 - If two devices edit while offline from each other, NoteKeep merges by
   note: whichever copy of a given note was edited most recently wins, rather
   than one whole device's changes overwriting the other's.
@@ -140,9 +195,22 @@ backs it up like any other file) or inspect/migrate later:
 
 ## What's intentionally not included
 
-- No reminders/notifications, no image attachments, no collaborators —
-  kept this scoped to what you asked for. The data format above is simple
-  enough to extend later if you want any of that.
+- No reminders/notifications, no image attachments, no collaborators. The data
+  format above is simple enough to extend later if you want any of that.
+- No frameworks, no bundler, no build step, and no third-party CDNs at runtime
+  (SortableJS is vendored into the repo). Editing a file and reloading is the
+  whole development loop.
+
+## Security notes
+
+- Your Nextcloud app-password lives only in `.env` on the server. It is never
+  sent to a browser — the frontend only ever talks to this app's `/api/*`.
+- `.env` is gitignored and dockerignored. `.env.example` holds placeholders
+  only; keep it that way.
+- `APP_TOKEN` gates `/api/*` only, never the static files — the app shell has
+  to stay fetchable for the service worker to cache it. It protects your notes
+  data, not the existence of the page.
+- All note content is HTML-escaped before rendering.
 
 ## Trying it locally first
 

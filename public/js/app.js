@@ -1124,7 +1124,9 @@ function offlineBlocker() {
 function warnIfOfflineImpossible() {
   const why = offlineBlocker();
   if (!why) return;
-  const origin = escapeHtml(window.location.origin);
+  // Assigned via textContent below, so no escaping here — escaping it would
+  // render the entities literally.
+  const origin = window.location.origin;
   const msg = {
     insecure: 'Offline mode is unavailable: this app was opened over an insecure connection ('
       + origin + '), and browsers only allow offline caching on HTTPS. Open your HTTPS address '
