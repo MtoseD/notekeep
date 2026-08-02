@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-02.4';
+const BUILD_ID = '2026-08-03.1';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -1022,6 +1022,10 @@ async function buildDiagnostics() {
   L.push('secure ctx  ' + yn(window.isSecureContext));
   L.push('online      ' + yn(navigator.onLine));
   L.push('standalone  ' + yn(window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true));
+  L.push('protocol    ' + window.location.protocol);
+  // Which browser/OS this is narrows "no service worker" a lot: private
+  // browsing, an old WebKit and a certificate error all present the same way.
+  L.push('agent       ' + navigator.userAgent);
 
   if (!('serviceWorker' in navigator)) {
     L.push('worker      UNAVAILABLE — untrusted TLS cert or private browsing');
