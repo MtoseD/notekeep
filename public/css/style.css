@@ -376,16 +376,24 @@ html[data-theme="dark"] .toast{ background:var(--surface-2); color:var(--text); 
 /* iOS zooms the page in whenever you focus a text field smaller than 16px, and
    it never zooms back out when you leave the field — so writing a note left
    the whole app slightly enlarged until you pinched it back. Lift every
-   focusable field to 16px on touch devices; desktop keeps its own sizing.
-   (Do NOT "fix" this with maximum-scale=1 on the viewport — that disables
-   pinch zoom entirely.) .composer-title is already 16px and .editor-title
-   19px, so neither needs a rule here. */
-@media (pointer: coarse){
+   focusable field to at least 16px on touch devices; desktop keeps its own
+   sizing. (Do NOT "fix" this with maximum-scale=1 on the viewport — that
+   disables pinch zoom entirely.)
+
+   Matched on a coarse pointer OR a narrow viewport: `pointer: coarse` alone is
+   not reliable (desktop-mode requests, hybrid devices and some in-app browsers
+   report `fine`), and missing the match brings the zoom straight back. Every
+   focusable field is listed, including ones already at 16px, so that changing
+   a size elsewhere in this file cannot silently reintroduce the bug. */
+@media (pointer: coarse), (max-width: 880px){
   .searchwrap input,
+  .composer-title,
   .composer-body,
+  .editor-title,
   .editor-body,
   .editor-checklist-row input,
   .label-popover-create input{ font-size:16px; }
+  .editor-title{ font-size:19px; }  /* already >=16px, keep it large */
 }
 
 /* ---------- Responsive: mobile sidebar becomes a drawer ---------- */

@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-03.2';
+const BUILD_ID = '2026-08-03.3';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -1149,9 +1149,33 @@ function warnIfOfflineImpossible() {
   document.body.appendChild(bar);
 }
 
+// Register the service worker before anything else and independently of it.
+// Nothing here touches the DOM or the network, and offline support must not be
+// defeatable by an unrelated failure further down: this used to run at the end
+// of init(), so a single throw anywhere above it (a renamed element after a
+// partial deploy, a bad cached note, a DOM id that moved) silently meant no
+// worker, no cache, and an app that would not open away from home — with
+// nothing on screen to say so.
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('/sw.js')
+    .then(updateBuildStamp)
+    // Swallowing this was hiding the most useful sentence available: a proxy
+    // CSP, a bad MIME type on sw.js or a scope violation all land here.
+    .catch((e) => { SW_ERROR = (e && e.message) || String(e); updateBuildStamp(); });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildStamp(); checkShellCache(); });
+  // "pending" resolves to "offline-ready" shortly after first install
+  setTimeout(() => { updateBuildStamp(); checkShellCache(); }, 3000);
+  checkShellCache();
+}
+
 async function init() {
+  registerServiceWorker();
+
   updateBuildStamp();
-  applyTheme(localStorage.getItem('nk_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  // Dark by default, regardless of the OS setting. Only an explicit choice via
+  // the theme toggle (stored as nk_theme) overrides it.
+  applyTheme(localStorage.getItem('nk_theme') || 'dark');
   resetComposer();
 
   try {
@@ -1165,26 +1189,19 @@ async function init() {
   purgeOldTrash();
   render();
 
-  // Everything below must be wired up BEFORE the first network round-trip.
-  // Off the home network the server is unreachable and those requests hang
-  // until they time out; anything awaited after them (the service worker
-  // registration in particular) would simply not happen for that whole
-  // window, which is how the app ends up with no offline shell to launch
-  // from next time.
-  warnIfOfflineImpossible();
-  document.getElementById('buildStamp').addEventListener('click', toggleDiagnostics);
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js')
-      .then(updateBuildStamp)
-      // Swallowing this was hiding the most useful sentence available: a proxy
-      // CSP, a bad MIME type on sw.js or a scope violation all land here.
-      .catch((e) => { SW_ERROR = (e && e.message) || String(e); updateBuildStamp(); });
-    navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildStamp(); checkShellCache(); });
-    // "pending" resolves to "offline-ready" shortly after first install
-    setTimeout(() => { updateBuildStamp(); checkShellCache(); }, 3000);
-    checkShellCache();
+  // Cosmetic wiring — never let it take anything else down with it.
+  try {
+    warnIfOfflineImpossible();
+    const stamp = document.getElementById('buildStamp');
+    if (stamp) stamp.addEventListener('click', toggleDiagnostics);
+  } catch (e) {
+    console.warn('Non-fatal UI wiring failed:', e);
   }
 
+  // These must be wired up BEFORE the first network round-trip: off the home
+  // network the server is unreachable and those requests hang until they time
+  // out, and anything awaited after them would not happen for that whole
+  // window.
   setInterval(() => { if (document.visibilityState === 'visible') pullFromServer(false); }, 20000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullFromServer(false); });
   window.addEventListener('online', () => pullFromServer(false));

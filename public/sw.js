@@ -1,4 +1,4 @@
-const CACHE = 'notekeep-shell-v5';
+const CACHE = 'notekeep-shell-v6';
 const SHELL_FILES = [
   '/',
   '/index.html',
