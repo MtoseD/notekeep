@@ -1,0 +1,20 @@
+# Paste this into TrueNAS SCALE's "Custom App > Install via YAML" (if your
+# version offers it), or use it as a reference for the manual form fields.
+# Edit the volume path and the NEXTCLOUD_* values before deploying.
+services:
+  notekeep:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - /mnt/yourpool/apps/notekeep:/app
+    command: sh -c "npm install --omit=dev && node server.js"
+    ports:
+      - "3077:3077"
+    environment:
+      - NEXTCLOUD_URL=https://cloud.yourdomain.com
+      - NEXTCLOUD_USERNAME=yourname
+      - NEXTCLOUD_APP_PASSWORD=xxxxx-xxxxx-xxxxx-xxxxx-xxxxx
+      - NOTES_FOLDER=NoteKeep
+      - PORT=3077
+      - APP_TOKEN=
+    restart: unless-stopped

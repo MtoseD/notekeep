@@ -1,0 +1,61 @@
+# ---- Secrets / local config ----
+.env
+.env.*
+!.env.example
+
+# ---- Node ----
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tgz
+.npm/
+
+# ---- Logs / runtime ----
+*.log
+logs/
+pids/
+*.pid
+*.seed
+
+# ---- Local test data (in case you point WebDAV at a local folder) ----
+webdavroot/
+/tmp/webdavroot/
+data.json
+
+# ---- Editor / IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- macOS ----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Icon
+.DocumentRevisions-V100
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# ---- Linux ----
+*~
+.directory
+.Trash-*
+.nfs*
+
+# ---- Windows (falls du mal von dort committest) ----
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk

@@ -1,0 +1,36 @@
+# ---- Secrets / local config ----
+.env
+.env.*
+!.env.example
+
+# ---- Node (reinstalled inside the image) ----
+node_modules/
+npm-debug.log*
+*.tgz
+.npm/
+
+# ---- Git / CI ----
+.git/
+.gitignore
+.gitattributes
+
+# ---- Local runtime data ----
+*.log
+logs/
+*.pid
+data.json
+webdavroot/
+
+# ---- Not needed at runtime ----
+Dockerfile
+.dockerignore
+docker-compose.truenas.yml
+README.md
+
+# ---- Editor / OS junk ----
+.vscode/
+.idea/
+*.swp
+.DS_Store
+._*
+Thumbs.db
