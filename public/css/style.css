@@ -144,17 +144,17 @@ html[data-theme="dark"] .nav-item.active{ background:var(--surface-2); color:var
   letter-spacing:.06em; text-transform:uppercase;
 }
 .label-list{ display:flex; flex-direction:column; }
-/* Build number + service-worker state. Tappable: it opens the offline
-   diagnostics panel. Deliberately tucked into the bottom of the sidebar
-   instead of floating over the notes — you only need it to confirm a deploy
-   landed or to debug offline, not while writing. */
-.build-stamp{
-  margin-top:auto; padding:16px 20px 12px; font-size:11px;
-  color:var(--text-dim); opacity:.6; line-height:1.4;
+.build-stamp{ margin-top:auto; padding:16px 20px 8px; font-size:11px; color:var(--text-dim); opacity:.6; }
+.sidebar.collapsed .build-stamp{ display:none; }
+.build-badge{
+  position:fixed; right:6px; bottom:6px; z-index:500;
+  font-size:10px; color:var(--text-dim); opacity:.45;
+  background:var(--bg); padding:8px 10px; border-radius:6px;
+  /* Tappable on purpose: it opens the offline diagnostics panel. Padding is
+     the tap target — the text itself is far too small to hit on a phone. */
   cursor:pointer; -webkit-user-select:none; user-select:none;
 }
-.build-stamp:active{ opacity:1; }
-.sidebar.collapsed .build-stamp{ display:none; }
+.build-badge:active{ opacity:.9; }
 .label-item{
   display:flex; align-items:center; gap:20px; width:100%;
   padding:0 20px; height:40px; border-radius:0 22px 22px 0;
@@ -372,29 +372,6 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
   font-size:14px; z-index:300; box-shadow:var(--shadow-lift);
 }
 html[data-theme="dark"] .toast{ background:var(--surface-2); color:var(--text); }
-
-/* iOS zooms the page in whenever you focus a text field smaller than 16px, and
-   it never zooms back out when you leave the field — so writing a note left
-   the whole app slightly enlarged until you pinched it back. Lift every
-   focusable field to at least 16px on touch devices; desktop keeps its own
-   sizing. (Do NOT "fix" this with maximum-scale=1 on the viewport — that
-   disables pinch zoom entirely.)
-
-   Matched on a coarse pointer OR a narrow viewport: `pointer: coarse` alone is
-   not reliable (desktop-mode requests, hybrid devices and some in-app browsers
-   report `fine`), and missing the match brings the zoom straight back. Every
-   focusable field is listed, including ones already at 16px, so that changing
-   a size elsewhere in this file cannot silently reintroduce the bug. */
-@media (pointer: coarse), (max-width: 880px){
-  .searchwrap input,
-  .composer-title,
-  .composer-body,
-  .editor-title,
-  .editor-body,
-  .editor-checklist-row input,
-  .label-popover-create input{ font-size:16px; }
-  .editor-title{ font-size:19px; }  /* already >=16px, keep it large */
-}
 
 /* ---------- Responsive: mobile sidebar becomes a drawer ---------- */
 @media (max-width:880px){

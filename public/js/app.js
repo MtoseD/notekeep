@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-03.3';
+const BUILD_ID = '2026-08-03.1';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -1074,19 +1074,14 @@ function toggleDiagnostics() {
   buildDiagnostics().then((t) => { panel.textContent = t + '\n\n(tap to close)'; });
 }
 
-// Lives quietly at the bottom of the sidebar (hidden behind the drawer on
-// mobile) rather than floating over the notes: it is how you confirm a deploy
-// actually landed, and it is the way into the diagnostics panel — but it is
-// not something to look at every day.
-function updateBuildStamp() {
-  const badge = document.getElementById('buildStamp');
-  if (!badge) return;
+function updateBuildBadge() {
+  const badge = document.getElementById('buildBadge');
   let sw;
   if (!window.isSecureContext) sw = 'no-https!';           // SW impossible on this origin
   else if (!('serviceWorker' in navigator)) sw = 'no-sw (untrusted cert?)';
   else if (navigator.serviceWorker.controller) sw = 'offline-ready';
   else sw = 'sw-pending';                                   // registered but not controlling yet (reload once)
-  let text = 'Build ' + BUILD_ID + ' · ' + sw;
+  let text = 'v' + BUILD_ID + ' · ' + sw;
   // "offline-ready" only means a worker is controlling the page — it says
   // nothing about whether the shell is actually IN the cache. Show the real
   // count, because a controlling worker over an empty cache still cannot cold
@@ -1102,7 +1097,7 @@ function checkShellCache() {
   const ch = new MessageChannel();
   ch.port1.onmessage = (e) => {
     SHELL_STATUS = e.data;
-    updateBuildStamp();
+    updateBuildBadge();
     if (e.data && e.data.missing && e.data.missing.length) {
       console.warn('[nk] shell cache incomplete, missing:', e.data.missing);
     }
@@ -1129,9 +1124,7 @@ function offlineBlocker() {
 function warnIfOfflineImpossible() {
   const why = offlineBlocker();
   if (!why) return;
-  // Assigned via textContent below, so no escaping here — escaping it would
-  // render the entities literally.
-  const origin = window.location.origin;
+  const origin = escapeHtml(window.location.origin);
   const msg = {
     insecure: 'Offline mode is unavailable: this app was opened over an insecure connection ('
       + origin + '), and browsers only allow offline caching on HTTPS. Open your HTTPS address '
@@ -1149,33 +1142,10 @@ function warnIfOfflineImpossible() {
   document.body.appendChild(bar);
 }
 
-// Register the service worker before anything else and independently of it.
-// Nothing here touches the DOM or the network, and offline support must not be
-// defeatable by an unrelated failure further down: this used to run at the end
-// of init(), so a single throw anywhere above it (a renamed element after a
-// partial deploy, a bad cached note, a DOM id that moved) silently meant no
-// worker, no cache, and an app that would not open away from home — with
-// nothing on screen to say so.
-function registerServiceWorker() {
-  if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register('/sw.js')
-    .then(updateBuildStamp)
-    // Swallowing this was hiding the most useful sentence available: a proxy
-    // CSP, a bad MIME type on sw.js or a scope violation all land here.
-    .catch((e) => { SW_ERROR = (e && e.message) || String(e); updateBuildStamp(); });
-  navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildStamp(); checkShellCache(); });
-  // "pending" resolves to "offline-ready" shortly after first install
-  setTimeout(() => { updateBuildStamp(); checkShellCache(); }, 3000);
-  checkShellCache();
-}
-
 async function init() {
-  registerServiceWorker();
-
-  updateBuildStamp();
-  // Dark by default, regardless of the OS setting. Only an explicit choice via
-  // the theme toggle (stored as nk_theme) overrides it.
-  applyTheme(localStorage.getItem('nk_theme') || 'dark');
+  document.getElementById('buildStamp').textContent = 'Build ' + BUILD_ID;
+  updateBuildBadge();
+  applyTheme(localStorage.getItem('nk_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   resetComposer();
 
   try {
@@ -1189,19 +1159,26 @@ async function init() {
   purgeOldTrash();
   render();
 
-  // Cosmetic wiring — never let it take anything else down with it.
-  try {
-    warnIfOfflineImpossible();
-    const stamp = document.getElementById('buildStamp');
-    if (stamp) stamp.addEventListener('click', toggleDiagnostics);
-  } catch (e) {
-    console.warn('Non-fatal UI wiring failed:', e);
+  // Everything below must be wired up BEFORE the first network round-trip.
+  // Off the home network the server is unreachable and those requests hang
+  // until they time out; anything awaited after them (the service worker
+  // registration in particular) would simply not happen for that whole
+  // window, which is how the app ends up with no offline shell to launch
+  // from next time.
+  warnIfOfflineImpossible();
+  document.getElementById('buildBadge').addEventListener('click', toggleDiagnostics);
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .then(updateBuildBadge)
+      // Swallowing this was hiding the most useful sentence available: a proxy
+      // CSP, a bad MIME type on sw.js or a scope violation all land here.
+      .catch((e) => { SW_ERROR = (e && e.message) || String(e); updateBuildBadge(); });
+    navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildBadge(); checkShellCache(); });
+    // "pending" resolves to "offline-ready" shortly after first install
+    setTimeout(() => { updateBuildBadge(); checkShellCache(); }, 3000);
+    checkShellCache();
   }
 
-  // These must be wired up BEFORE the first network round-trip: off the home
-  // network the server is unreachable and those requests hang until they time
-  // out, and anything awaited after them would not happen for that whole
-  // window.
   setInterval(() => { if (document.visibilityState === 'visible') pullFromServer(false); }, 20000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullFromServer(false); });
   window.addEventListener('online', () => pullFromServer(false));
