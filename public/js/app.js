@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-02.3';
+const BUILD_ID = '2026-08-02.4';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -1024,7 +1024,7 @@ async function buildDiagnostics() {
   L.push('standalone  ' + yn(window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true));
 
   if (!('serviceWorker' in navigator)) {
-    L.push('worker      UNSUPPORTED by this browser');
+    L.push('worker      UNAVAILABLE — untrusted TLS cert or private browsing');
   } else {
     L.push('controller  ' + yn(navigator.serviceWorker.controller));
     try {
@@ -1074,7 +1074,7 @@ function updateBuildBadge() {
   const badge = document.getElementById('buildBadge');
   let sw;
   if (!window.isSecureContext) sw = 'no-https!';           // SW impossible on this origin
-  else if (!('serviceWorker' in navigator)) sw = 'no-sw-support';
+  else if (!('serviceWorker' in navigator)) sw = 'no-sw (untrusted cert?)';
   else if (navigator.serviceWorker.controller) sw = 'offline-ready';
   else sw = 'sw-pending';                                   // registered but not controlling yet (reload once)
   let text = 'v' + BUILD_ID + ' · ' + sw;
@@ -1101,17 +1101,40 @@ function checkShellCache() {
   try { sw.postMessage({ type: 'shell-check' }, [ch.port2]); } catch (e) { /* ignore */ }
 }
 
-// The one failure mode the app cannot fix for you: a PWA installed from an
-// insecure origin (e.g. http://<lan-ip>:3077) can never register a service
-// worker, so it can never work offline no matter what the code does. Say so
-// loudly rather than leaving it as three small words in the corner badge.
-function warnIfInsecureOrigin() {
-  if (window.isSecureContext) return;
+// The failure modes the app cannot fix for itself. In both of these the browser
+// refuses to give us a service worker, so offline can never work no matter what
+// the code does — say why, loudly, instead of leaving it as three small words
+// in the corner badge.
+function offlineBlocker() {
+  if (!window.isSecureContext) return 'insecure';
+  // An https:// origin that still has no navigator.serviceWorker is almost
+  // always a certificate the browser does not trust: service workers are
+  // disabled on any origin with a TLS error, and clicking through the warning
+  // does not re-enable them. (Private browsing is the other cause.)
+  if (!('serviceWorker' in navigator)) {
+    return window.location.protocol === 'https:' ? 'untrusted-cert' : 'no-sw';
+  }
+  return null;
+}
+
+function warnIfOfflineImpossible() {
+  const why = offlineBlocker();
+  if (!why) return;
+  const origin = escapeHtml(window.location.origin);
+  const msg = {
+    insecure: 'Offline mode is unavailable: this app was opened over an insecure connection ('
+      + origin + '), and browsers only allow offline caching on HTTPS. Open your HTTPS address '
+      + 'instead, then re-add it to your home screen.',
+    'untrusted-cert': 'Offline mode is unavailable: the browser is not exposing service workers on '
+      + origin + '. That almost always means the TLS certificate is not trusted — browsers disable '
+      + 'service workers on any origin with a certificate warning, and continuing past the warning '
+      + 'does not re-enable them. Install a certificate your device trusts for this hostname (or '
+      + 'check you are not in a private browsing window).',
+    'no-sw': 'Offline mode is unavailable: this browser does not support service workers.',
+  }[why];
   const bar = document.createElement('div');
   bar.className = 'insecure-banner';
-  bar.innerHTML = 'Offline mode is unavailable: this app was opened over an insecure connection ('
-    + escapeHtml(window.location.origin) + '), and browsers only allow offline caching on HTTPS. '
-    + 'Open your HTTPS address instead, then re-add it to your home screen.';
+  bar.textContent = msg;
   document.body.appendChild(bar);
 }
 
@@ -1138,7 +1161,7 @@ async function init() {
   // registration in particular) would simply not happen for that whole
   // window, which is how the app ends up with no offline shell to launch
   // from next time.
-  warnIfInsecureOrigin();
+  warnIfOfflineImpossible();
   document.getElementById('buildBadge').addEventListener('click', toggleDiagnostics);
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
