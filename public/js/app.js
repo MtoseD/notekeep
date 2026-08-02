@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-02.1';
+const BUILD_ID = '2026-08-02.2';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -271,7 +271,6 @@ function renameLabel(id) {
   if (!name || !name.trim()) return;
   label.name = name.trim();
   saveLocal();
-  renderSidebarLabels();
   render();
 }
 
@@ -281,7 +280,6 @@ function deleteLabel(id) {
   DATA.notes.forEach((n) => { n.labels = (n.labels || []).filter((lid) => lid !== id); });
   if (VIEW.type === 'label' && VIEW.labelId === id) setView({ type: 'notes' });
   saveLocal();
-  renderSidebarLabels();
   render();
 }
 
@@ -344,6 +342,13 @@ const emptyState = document.getElementById('emptyState');
 const emptyStateText = document.getElementById('emptyStateText');
 
 function render() {
+  // The sidebar label list is part of rendering DATA, so it belongs here
+  // rather than at each call site. It used to be the caller's job, and
+  // pullFromServer — which replaces DATA wholesale on every sync — never did
+  // it: labels stayed missing from the sidebar until something called
+  // setView(), i.e. until you clicked Archive or Trash.
+  renderSidebarLabels();
+
   const { list, flat } = currentList();
   list.sort((a, b) => (b.order || 0) - (a.order || 0));
 
@@ -555,7 +560,6 @@ function setView(v) {
   searchInput.value = '';
   clearSearchBtn.classList.add('hidden');
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === v.type));
-  renderSidebarLabels();
   sidebar.classList.remove('open'); sidebarScrim.classList.remove('show');
   render();
 }
@@ -1002,6 +1006,8 @@ function showToast(msg) {
 }
 
 /* ================= Init ================= */
+let SHELL_STATUS = null;
+
 function updateBuildBadge() {
   const badge = document.getElementById('buildBadge');
   let sw;
@@ -1009,7 +1015,42 @@ function updateBuildBadge() {
   else if (!('serviceWorker' in navigator)) sw = 'no-sw-support';
   else if (navigator.serviceWorker.controller) sw = 'offline-ready';
   else sw = 'sw-pending';                                   // registered but not controlling yet (reload once)
-  badge.textContent = 'v' + BUILD_ID + ' · ' + sw;
+  let text = 'v' + BUILD_ID + ' · ' + sw;
+  // "offline-ready" only means a worker is controlling the page — it says
+  // nothing about whether the shell is actually IN the cache. Show the real
+  // count, because a controlling worker over an empty cache still cannot cold
+  // start, and that combination is otherwise invisible.
+  if (SHELL_STATUS) text += ' · shell ' + SHELL_STATUS.have + '/' + SHELL_STATUS.total;
+  badge.textContent = text;
+}
+
+// Ask the worker to top up the shell cache and tell us what it holds.
+function checkShellCache() {
+  const sw = navigator.serviceWorker && navigator.serviceWorker.controller;
+  if (!sw) return;
+  const ch = new MessageChannel();
+  ch.port1.onmessage = (e) => {
+    SHELL_STATUS = e.data;
+    updateBuildBadge();
+    if (e.data && e.data.missing && e.data.missing.length) {
+      console.warn('[nk] shell cache incomplete, missing:', e.data.missing);
+    }
+  };
+  try { sw.postMessage({ type: 'shell-check' }, [ch.port2]); } catch (e) { /* ignore */ }
+}
+
+// The one failure mode the app cannot fix for you: a PWA installed from an
+// insecure origin (e.g. http://<lan-ip>:3077) can never register a service
+// worker, so it can never work offline no matter what the code does. Say so
+// loudly rather than leaving it as three small words in the corner badge.
+function warnIfInsecureOrigin() {
+  if (window.isSecureContext) return;
+  const bar = document.createElement('div');
+  bar.className = 'insecure-banner';
+  bar.innerHTML = 'Offline mode is unavailable: this app was opened over an insecure connection ('
+    + escapeHtml(window.location.origin) + '), and browsers only allow offline caching on HTTPS. '
+    + 'Open your HTTPS address instead, then re-add it to your home screen.';
+  document.body.appendChild(bar);
 }
 
 async function init() {
@@ -1027,7 +1068,6 @@ async function init() {
     console.warn('Local cache read failed, starting fresh from Nextcloud:', e);
   }
   purgeOldTrash();
-  renderSidebarLabels();
   render();
 
   // Everything below must be wired up BEFORE the first network round-trip.
@@ -1036,11 +1076,13 @@ async function init() {
   // registration in particular) would simply not happen for that whole
   // window, which is how the app ends up with no offline shell to launch
   // from next time.
+  warnIfInsecureOrigin();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').then(updateBuildBadge).catch(updateBuildBadge);
-    navigator.serviceWorker.addEventListener('controllerchange', updateBuildBadge);
+    navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildBadge(); checkShellCache(); });
     // "pending" resolves to "offline-ready" shortly after first install
-    setTimeout(updateBuildBadge, 3000);
+    setTimeout(() => { updateBuildBadge(); checkShellCache(); }, 3000);
+    checkShellCache();
   }
 
   setInterval(() => { if (document.visibilityState === 'visible') pullFromServer(false); }, 20000);

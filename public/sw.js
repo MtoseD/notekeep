@@ -1,4 +1,4 @@
-const CACHE = 'notekeep-shell-v4';
+const CACHE = 'notekeep-shell-v5';
 const SHELL_FILES = [
   '/',
   '/index.html',
@@ -20,12 +20,16 @@ const SHELL_FILES = [
 // ~a minute, and navigator.onLine is still true because the phone does have
 // internet. Without a deadline the app sits on a blank screen that whole time
 // and reads as "broken". With one, a cold launch falls back to cache fast.
+// A navigation gets a tighter budget than a sub-resource: it is the thing
+// standing between a PWA tap and any pixels at all.
+const NAV_TIMEOUT_MS = 1500;
 const NET_TIMEOUT_MS = 3000;
 
-// Fetch every shell file that isn't already in the cache. Used on install and
-// again on activate: if install ran on a flaky connection some files get
-// skipped, and a half-populated cache is exactly what makes a later offline
-// cold start fail.
+// Fetch every shell file that isn't already in the cache. Runs on install, on
+// activate, and on demand from the page (see the 'shell-check' message). If
+// install ran on a flaky connection some files get skipped, and a
+// half-populated cache is exactly what makes a later offline cold start fail —
+// so this has to be retryable rather than a one-shot at install time.
 async function fillShellCache(cache) {
   await Promise.all(SHELL_FILES.map(async (url) => {
     try {
@@ -37,6 +41,15 @@ async function fillShellCache(cache) {
       console.warn('[sw] precache failed for', url, e);
     }
   }));
+}
+
+async function shellStatus() {
+  const cache = await caches.open(CACHE);
+  const missing = [];
+  for (const url of SHELL_FILES) {
+    if (!(await cache.match(url))) missing.push(url);
+  }
+  return { cache: CACHE, have: SHELL_FILES.length - missing.length, total: SHELL_FILES.length, missing };
 }
 
 self.addEventListener('install', (event) => {
@@ -54,6 +67,21 @@ self.addEventListener('activate', (event) => {
     // Second chance to complete the shell if install hit a bad network.
     await caches.open(CACHE).then(fillShellCache);
     await self.clients.claim();
+  })());
+});
+
+// The page asks for this on every load: top up anything missing from the shell
+// cache and report what we actually hold. Without it, a cache left incomplete
+// by a bad install stays broken until sw.js itself changes — which is exactly
+// the "it just never works offline" failure, and it is invisible from the UI.
+self.addEventListener('message', (event) => {
+  if (!event.data || event.data.type !== 'shell-check') return;
+  event.waitUntil((async () => {
+    try {
+      await caches.open(CACHE).then(fillShellCache);
+    } catch (e) { /* offline: report what we have */ }
+    const status = await shellStatus();
+    if (event.ports && event.ports[0]) event.ports[0].postMessage(status);
   })());
 });
 
@@ -86,8 +114,13 @@ self.addEventListener('fetch', (event) => {
     const cached = await caches.match(event.request);
 
     if (cached) {
-      // We have something to show, so the network only gets NET_TIMEOUT_MS.
-      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NET_TIMEOUT_MS));
+      // Known-offline: don't spend even the timeout on a request that cannot
+      // succeed. (This only catches "no network at all" — off the home network
+      // with working cellular, onLine stays true and the deadline below is
+      // what saves the launch.)
+      if (self.navigator && self.navigator.onLine === false) return cached;
+      const budget = event.request.mode === 'navigate' ? NAV_TIMEOUT_MS : NET_TIMEOUT_MS;
+      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), budget));
       const res = await Promise.race([network.catch(() => null), timeout]);
       return res || cached;
     }
