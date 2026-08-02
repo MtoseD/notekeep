@@ -1,7 +1,12 @@
 'use strict';
 
-const BUILD_ID = '2026-07-05.3';
+const BUILD_ID = '2026-08-02.1';
 console.log('NoteKeep build', BUILD_ID);
+
+// Upper bound on checklist rows drawn into a card preview. Keep this at or
+// above what the .note-checklist max-height can show, so the CSS cap (not this
+// number) is what decides where a long checklist gets cut off.
+const PREVIEW_CHECKLIST_ITEMS = 16;
 
 /* ================= Utilities ================= */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -32,9 +37,26 @@ let SEARCH = '';
 let TOKEN = localStorage.getItem('nk_token') || '';
 
 /* ================= API ================= */
+// Off the home network the server's host resolves but never answers, so a bare
+// fetch() sits there for the better part of a minute instead of rejecting —
+// leaving the sync spinner turning and the real state ("offline") unreported.
+// Give every API call a deadline so that resolves in seconds.
+const API_TIMEOUT_MS = 10000;
+
 async function apiFetch(url, opts = {}) {
   opts.headers = Object.assign({}, opts.headers, TOKEN ? { 'x-app-token': TOKEN } : {});
-  const res = await fetch(url, opts);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(url, Object.assign({}, opts, { signal: ctrl.signal }));
+  } catch (e) {
+    // "signal is aborted without reason" means nothing to the user.
+    if (e && e.name === 'AbortError') throw new Error('server did not respond');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   if (res.status === 401) {
     TOKEN = window.prompt('This NoteKeep server requires an access token:') || '';
     localStorage.setItem('nk_token', TOKEN);
@@ -389,11 +411,13 @@ function renderNoteCard(n, ctx) {
 
   if (n.type === 'checklist') {
     const items = n.items || [];
-    const shown = items.slice(0, 10);
+    // Render enough items to actually fill the taller preview cap; the CSS
+    // max-height still does the real clipping, this just bounds the DOM work.
+    const shown = items.slice(0, PREVIEW_CHECKLIST_ITEMS);
     inner += '<ul class="note-checklist">' + shown.map((i) => `
       <li class="${i.checked ? 'checked' : ''}"><span class="chk"></span><span>${escapeHtml(i.text)}</span></li>
     `).join('') + '</ul>';
-    if (items.length > 10) inner += `<div class="note-checklist-more">+ ${items.length - 10} more</div>`;
+    if (items.length > shown.length) inner += `<div class="note-checklist-more">+ ${items.length - shown.length} more</div>`;
   } else if (n.body) {
     inner += `<div class="note-body">${escapeHtml(n.body)}</div>`;
   }
@@ -444,9 +468,14 @@ function renderNoteCard(n, ctx) {
 
 /* ---- Masonry via CSS grid row-span technique ---- */
 function layoutMasonry(grid) {
-  const styles = getComputedStyle(document.documentElement);
-  const row = parseInt(styles.getPropertyValue('--row')) || 8;
-  const gap = parseInt(styles.getPropertyValue('--gap')) || 14;
+  // Read the *used* row height and gap off the grid itself rather than the
+  // --row/--gap custom properties on :root. The mobile breakpoint narrows the
+  // gap by setting `gap` on .notes-grid directly, which leaves --gap untouched
+  // — so measuring the variable made every card on a phone come out one row
+  // too short and clipped the label chips off the bottom.
+  const styles = getComputedStyle(grid);
+  const row = parseFloat(styles.gridAutoRows) || 8;
+  const gap = parseFloat(styles.rowGap) || 14;
   const cards = Array.from(grid.children);
   // Reset spans first so a previously-set span doesn't mask the true
   // content height when shrinking.
@@ -973,9 +1002,19 @@ function showToast(msg) {
 }
 
 /* ================= Init ================= */
+function updateBuildBadge() {
+  const badge = document.getElementById('buildBadge');
+  let sw;
+  if (!window.isSecureContext) sw = 'no-https!';           // SW impossible on this origin
+  else if (!('serviceWorker' in navigator)) sw = 'no-sw-support';
+  else if (navigator.serviceWorker.controller) sw = 'offline-ready';
+  else sw = 'sw-pending';                                   // registered but not controlling yet (reload once)
+  badge.textContent = 'v' + BUILD_ID + ' · ' + sw;
+}
+
 async function init() {
   document.getElementById('buildStamp').textContent = 'Build ' + BUILD_ID;
-  document.getElementById('buildBadge').textContent = 'v' + BUILD_ID;
+  updateBuildBadge();
   applyTheme(localStorage.getItem('nk_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   resetComposer();
 
@@ -991,15 +1030,24 @@ async function init() {
   renderSidebarLabels();
   render();
 
-  await pingServer();
-  await pullFromServer(true);
+  // Everything below must be wired up BEFORE the first network round-trip.
+  // Off the home network the server is unreachable and those requests hang
+  // until they time out; anything awaited after them (the service worker
+  // registration in particular) would simply not happen for that whole
+  // window, which is how the app ends up with no offline shell to launch
+  // from next time.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').then(updateBuildBadge).catch(updateBuildBadge);
+    navigator.serviceWorker.addEventListener('controllerchange', updateBuildBadge);
+    // "pending" resolves to "offline-ready" shortly after first install
+    setTimeout(updateBuildBadge, 3000);
+  }
 
   setInterval(() => { if (document.visibilityState === 'visible') pullFromServer(false); }, 20000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullFromServer(false); });
   window.addEventListener('online', () => pullFromServer(false));
 
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  }
+  await pingServer();
+  await pullFromServer(true);
 }
 init();

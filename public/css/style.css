@@ -212,7 +212,7 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
   cursor:pointer;
   display:flex; flex-direction:column;
   overflow:hidden;
-  min-height:108px;
+  min-height:60px;
   transition:box-shadow .15s ease;
 }
 .note-card:hover{ box-shadow:var(--shadow-lift); }
@@ -229,32 +229,43 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
 .note-pin-btn svg{ width:17px; height:17px; }
 .note-pin-btn:hover{ background:rgba(0,0,0,.06); }
 
-.note-title{ font-weight:700; font-size:16px; margin:0 26px 6px 0; word-break:break-word; }
+/* Card anatomy: every part is flex:none. Truncation is done purely by the
+   preview's own line-clamp/max-height, never by flex shrinking — a shrinkable
+   item would collapse to nothing while layoutMasonry measures the card at
+   span 1, which both mis-sizes the card and squeezes the label chips out.
+   Fixed-size children are what keeps labels on screen at any note length. */
+.note-title{ font-weight:700; font-size:16px; margin:0 26px 6px 0; word-break:break-word; flex:none; }
 .note-body{
-  font-size:14px; line-height:1.5; color:var(--text); white-space:pre-wrap; word-break:break-word; margin:0; flex:1;
-  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:22; overflow:hidden; max-height:33em;
+  font-size:14px; line-height:1.5; color:var(--text); white-space:pre-wrap; word-break:break-word; margin:0;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:30; overflow:hidden; max-height:45em;
+  flex:none;
 }
-.note-checklist{ list-style:none; margin:0; padding:0; max-height:33em; overflow:hidden; }
-.note-card.has-more{ position:relative; }
-.note-card.has-more::after{
-  content:''; position:absolute; left:0; right:0; bottom:44px; height:40px;
-  background:linear-gradient(to bottom, transparent, var(--card-bg, var(--surface)));
-  pointer-events:none;
+.note-checklist{
+  list-style:none; margin:0; padding:0; max-height:45em; overflow:hidden;
+  flex:none;
+}
+/* When content is truncated, fade out the text itself at its bottom edge.
+   Masking the text (rather than overlaying a gradient on the card) keeps
+   labels and footer fully visible regardless of note length or color. */
+.note-card.has-more .note-body,
+.note-card.has-more .note-checklist{
+  -webkit-mask-image:linear-gradient(to bottom, #000 85%, transparent 100%);
+  mask-image:linear-gradient(to bottom, #000 85%, transparent 100%);
 }
 .note-checklist li{ display:flex; align-items:flex-start; gap:8px; font-size:14px; padding:3px 0; line-height:1.4; }
 .note-checklist li .chk{ width:16px; height:16px; border-radius:4px; border:1.6px solid var(--text-dim); flex:none; margin-top:2px; }
 .note-checklist li.checked .chk{ background:var(--accent); border-color:var(--accent); }
 .note-checklist li.checked span{ text-decoration:line-through; color:var(--text-dim); }
-.note-checklist-more{ font-size:13px; color:var(--text-dim); padding:3px 0; }
+.note-checklist-more{ font-size:13px; color:var(--text-dim); padding:3px 0; flex:none; }
 
-.note-labels{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.note-labels{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; flex:none; }
 .note-label-chip{
   font-size:11px; padding:3px 9px; border-radius:100px; background:var(--surface-2); color:var(--text-dim);
 }
 
-.note-footer{ display:flex; align-items:center; opacity:0; transition:opacity .12s; margin-top:auto; padding-top:4px; height:38px; }
+.note-footer{ display:flex; align-items:center; opacity:0; transition:opacity .12s; margin-top:auto; padding-top:6px; height:32px; flex:none; }
 .note-card:hover .note-footer{ opacity:1; }
-.note-footer .icon-btn{ width:34px; height:34px; }
+.note-footer .icon-btn{ width:32px; height:32px; }
 .note-footer svg{ width:16px; height:16px; }
 
 .empty-state{
@@ -354,6 +365,10 @@ html[data-theme="dark"] .toast{ background:var(--surface-2); color:var(--text); 
   .notes-grid{ grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; }
   .note-footer{ display:none; }
   .note-pin-btn{ opacity:1; }
+  /* Cards are ~half as wide here, so the same line cap would make a long note
+     tower over the grid. Cap a bit shorter than desktop, same behaviour. */
+  .note-body{ -webkit-line-clamp:24; max-height:36em; }
+  .note-checklist{ max-height:36em; }
 }
 @media (max-width:520px){
   .brand{ display:none; }
