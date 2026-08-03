@@ -9,6 +9,15 @@ Installs as a PWA on phone and desktop and works offline.
 
 ![NoteKeep](docs/screenshot.png)
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/mobile-dark.png" width="210" alt="Notes grid, dark"><br><sub>Notes — dark</sub></td>
+    <td align="center"><img src="docs/mobile-light.png" width="210" alt="Notes grid, light"><br><sub>Notes — light</sub></td>
+    <td align="center"><img src="docs/mobile-sidebar-dark.png" width="210" alt="Sidebar and labels, dark"><br><sub>Labels — dark</sub></td>
+    <td align="center"><img src="docs/mobile-sidebar-light.png" width="210" alt="Sidebar and labels, light"><br><sub>Labels — light</sub></td>
+  </tr>
+</table>
+
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![dependencies](https://img.shields.io/badge/runtime%20deps-3-brightgreen)
@@ -240,3 +249,9 @@ copy, and debugging without it wastes hours.
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
+
+## Built with
+
+Written with [Claude Code](https://claude.com/claude-code), Anthropic's agentic
+coding tool. Individual commits carry `Co-Authored-By` trailers where it
+contributed.
