@@ -171,6 +171,14 @@
 
 <div class="toast hidden" id="toast"></div>
 
+<!-- Compatibility shim, hidden via CSS. A browser holding a cached app.js from
+     2026-08-03.5 or earlier looks this element up and writes to it without a
+     null check, on the second line of init() — before applyTheme(). With the
+     element gone that throws, no data-theme is ever set, and the app silently
+     falls back to the light palette. Keeping an empty hidden node costs
+     nothing and makes a stale app.js harmless. Safe to delete once no client
+     can still be running .5. -->
+<div id="buildBadge" class="build-badge"></div>
 <script src="/js/vendor/Sortable.min.js"></script>
 <script src="/js/db.js"></script>
 <script src="/js/app.js"></script>

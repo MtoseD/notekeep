@@ -144,6 +144,10 @@ html[data-theme="dark"] .nav-item.active{ background:var(--surface-2); color:var
   letter-spacing:.06em; text-transform:uppercase;
 }
 .label-list{ display:flex; flex-direction:column; }
+/* Hidden compatibility shim — see the note in index.html. Present only so a
+   stale app.js has something to write to; never shown. */
+.build-badge{ display:none; }
+
 /* Build number + service-worker state. Tappable: opens the diagnostics panel.
    Padding is the tap target — the text alone is far too small to hit. */
 .build-stamp{
