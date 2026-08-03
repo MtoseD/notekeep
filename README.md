@@ -17,8 +17,8 @@ Installs as a PWA on phone and desktop and works offline.
 
 - A **Nextcloud** you can create an app password on
 - **Node.js 18+** (or Docker) on a machine your devices can reach
-- For offline support: a way to serve it over **HTTPS with a certificate your
-  devices trust** — see step 4, this part is not optional
+- For offline support: **HTTPS** — any reverse proxy that terminates TLS will
+  do (see step 4)
 
 Three runtime dependencies (`express`, `webdav`, `dotenv`). No build step, no
 bundler, no framework.
@@ -100,41 +100,21 @@ docker run -d --name notekeep -p 3077:3077 --env-file .env --restart unless-stop
 `docker-compose.truenas.yml` is a reference for deploying on TrueNAS SCALE as
 a Custom App (bind-mount the project folder, no image build required).
 
-## 4. Serve it over HTTPS with a certificate your devices trust
+## 4. Serve it over HTTPS (needed for offline)
 
-**This step is not optional if you want the app to work offline**, and it
-applies even on a LAN-only setup with no internet exposure at all.
+Browsers only register a service worker — the thing that caches the app so it
+can launch with no server reachable — on a secure origin. So `http://<ip>:3077`
+is fine for a quick look, but offline support needs HTTPS.
 
-Browsers only allow a service worker — the thing that caches the app so it can
-launch with no server reachable — on a *trustworthy* origin. In practice:
+In practice that means putting NoteKeep behind a reverse proxy on its own
+hostname, proxying to `localhost:3077`. Caddy, Traefik and Nginx Proxy Manager
+all obtain and renew a certificate for you. Tailscale is another easy route: it
+issues trusted HTTPS certificates for tailnet hostnames.
 
-| How you open it | Offline works? |
-|---|---|
-| `http://<server-ip>:3077` | **No.** Insecure origin, service workers are blocked outright. |
-| `https://…` with a self-signed / untrusted cert | **No.** Browsers disable service workers on any origin with a certificate warning, and clicking "continue anyway" does *not* re-enable them. |
-| `https://…` with a certificate the device trusts | Yes. |
-
-The middle row is the one that catches people out: everything looks fine while
-you're at home, because online mode needs no service worker — so the problem
-only shows up later, when you're away and the app won't open.
-
-Put NoteKeep behind a reverse proxy (Caddy, nginx, Traefik) on its own
-hostname and give it a real certificate. Two ways that need **no port
-forwarding and no inbound internet access**:
-
-- **Let's Encrypt via a DNS-01 challenge.** Validation happens by writing a
-  TXT record in your DNS zone, so the certificate is issued for a *name* — the
-  server itself never has to be reachable from the internet. Needs a DNS
-  provider with an API token. Caddy and Traefik do this for you; certbot needs
-  the matching DNS plugin.
-- **Your own local CA**, if nothing on your network may talk to the internet.
-  Generate a root certificate, sign one for your hostname, and install the root
-  on each device. On iOS you must *also* enable it under Settings → General →
-  About → Certificate Trust Settings. Tedious per device, but fully offline.
-
-Tailscale is the easy alternative: it issues trusted HTTPS certificates for
-your tailnet hostnames, so you get a valid cert and remote access without
-exposing anything publicly.
+If your browser shows a certificate warning on the app's URL, offline will not
+work no matter what: service workers stay disabled on an origin with a
+certificate error, and clicking "continue anyway" does not re-enable them. A
+normal padlock means you are fine.
 
 ## 5. Install it on your devices
 
@@ -171,8 +151,8 @@ service worker line:
   reopen it with the server unreachable to confirm.
 - `sw-pending` — registered but not in control yet; reload once.
 - `no-sw (untrusted cert?)` — the browser is withholding service workers.
-  Almost always an untrusted certificate; see step 4. (A private browsing
-  window does the same thing.)
+  Usually a private browsing window, or a certificate the browser does not
+  trust (see step 4).
 - `no-https!` — you opened it over `http://`. See step 4.
 - `shell 4/11` or similar — the cache is incomplete; reload once with the
   server reachable and it will top itself up.
