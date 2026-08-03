@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-04.1';
+const BUILD_ID = '2026-08-04.2';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -610,7 +610,7 @@ function openLabelMenu(anchor, labelId) {
   const pop = ensureLabelMenuPopover();
   hideAllPopovers();
   labelMenuTarget = labelId;
-  positionPopover(pop, anchor);
+  positionPopover(pop, anchor, 'right');
 }
 
 function renderSidebarLabels() {
@@ -634,7 +634,9 @@ function renderSidebarLabels() {
     // deleting a label was simply unreachable.
     const menu = document.createElement('button');
     menu.type = 'button';
-    menu.className = 'label-menu-btn popover-trigger';
+    // icon-btn/tiny are the app's standard control styles — reused rather than
+    // restyled, so this button matches every other icon button by construction.
+    menu.className = 'icon-btn tiny label-menu-btn popover-trigger';
     menu.title = 'Label options';
     menu.setAttribute('aria-label', 'Options for label ' + l.name);
     menu.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>';
@@ -918,11 +920,15 @@ document.getElementById('editorLabelBtn').addEventListener('click', (e) => openL
 document.getElementById('editorMoreBtn').addEventListener('click', (e) => openMorePopover(e.currentTarget, editingId));
 
 /* ================= Popovers ================= */
-function positionPopover(pop, anchor) {
+// align:'right' lines the popover's right edge up with the anchor's, so it
+// opens back across the thing it belongs to instead of trailing away from it.
+// Anything anchored to a control at the right-hand end of a row wants this;
+// left alignment there leaves the menu sitting diagonally off the item.
+function positionPopover(pop, anchor, align) {
   const r = anchor.getBoundingClientRect();
   pop.classList.remove('hidden');
   const pw = pop.offsetWidth, ph = pop.offsetHeight;
-  let left = Math.min(r.left, window.innerWidth - pw - 12);
+  let left = Math.min(align === 'right' ? r.right - pw : r.left, window.innerWidth - pw - 12);
   let top = r.bottom + 6;
   if (top + ph > window.innerHeight - 8) top = r.top - ph - 6;
   pop.style.left = Math.max(8, left) + 'px';

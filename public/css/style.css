@@ -4,7 +4,7 @@
      stylesheet and script from different deploys — a mismatch has three
      times now presented as a mystery bug (unstyled controls, a light
      theme, "everything is broken") rather than as what it is. */
-  --build:"2026-08-04.1";
+  --build:"2026-08-04.2";
   --bg:#F2EFE9;
   --surface:#FFFFFF;
   --surface-2:#EDEAE3;
@@ -176,15 +176,14 @@ html[data-theme="dark"] .nav-item.active{ background:var(--surface-2); color:var
   font-size:14.5px; text-align:left;
 }
 .label-item span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Look comes from .icon-btn.tiny; this only places it and controls when it
+   shows, so it cannot drift from the app's other icon buttons. */
 .label-menu-btn{
-  position:absolute; right:8px; top:50%; transform:translateY(-50%);
-  width:30px; height:30px; border-radius:50%; border:none; background:transparent;
-  display:flex; align-items:center; justify-content:center;
-  color:var(--text-dim); cursor:pointer; opacity:0; transition:opacity .12s;
+  position:absolute; right:10px; top:50%; transform:translateY(-50%);
+  color:var(--text-dim); opacity:0; transition:opacity .12s;
 }
-.label-menu-btn svg{ width:16px; height:16px; }
 .label-row:hover .label-menu-btn{ opacity:1; }
-.label-menu-btn:hover{ background:var(--surface-2); color:var(--text); }
+.label-menu-btn:hover{ color:var(--text); }
 /* No hover on touch, so it has to be permanently visible there — this is the
    only way to rename or delete a label on a phone. */
 @media (pointer: coarse), (max-width: 880px){
