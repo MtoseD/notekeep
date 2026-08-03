@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-03.4';
+const BUILD_ID = '2026-08-03.5';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or

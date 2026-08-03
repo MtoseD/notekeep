@@ -403,3 +403,27 @@ html[data-theme="dark"] .toast{ background:var(--surface-2); color:var(--text); 
   }
   .overlay{ align-items:stretch; }
 }
+
+/* iOS zooms the page in whenever you focus a text field smaller than 16px, and
+   it never zooms back out when you leave the field — so starting a note, or
+   searching, left the whole app slightly enlarged until you pinched it back.
+   Lift every focusable field to at least 16px on touch devices; desktop keeps
+   its own sizing. (Do NOT "fix" this with maximum-scale=1 on the viewport —
+   that disables pinch zoom entirely.)
+
+   Matched on a coarse pointer OR a narrow viewport: pointer:coarse alone is not
+   reliable (desktop-mode requests, hybrid devices and some in-app browsers
+   report `fine`), and missing the match brings the zoom straight back. Every
+   focusable field is listed, including ones already at 16px, so changing a size
+   earlier in this file cannot silently reintroduce the bug. Last block in the
+   file on purpose: same specificity as the base rules, so it has to win on
+   source order. */
+@media (pointer: coarse), (max-width: 880px){
+  .searchwrap input,
+  .composer-title,
+  .composer-body,
+  .editor-body,
+  .editor-checklist-row input,
+  .label-popover-create input{ font-size:16px; }
+  .editor-title{ font-size:19px; }   /* already above the threshold; keep it big */
+}
