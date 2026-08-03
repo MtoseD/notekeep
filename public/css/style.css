@@ -1,5 +1,10 @@
 /* ---------- Tokens ---------- */
 :root{
+  /* Must match BUILD_ID in app.js. Read back at startup to detect a
+     stylesheet and script from different deploys — a mismatch has three
+     times now presented as a mystery bug (unstyled controls, a light
+     theme, "everything is broken") rather than as what it is. */
+  --build:"2026-08-04.1";
   --bg:#F2EFE9;
   --surface:#FFFFFF;
   --surface-2:#EDEAE3;

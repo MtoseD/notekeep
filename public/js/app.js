@@ -1,12 +1,28 @@
 'use strict';
 
-const BUILD_ID = '2026-08-03.12';
+const BUILD_ID = '2026-08-04.1';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
 // above what the .note-checklist max-height can show, so the CSS cap (not this
 // number) is what decides where a long checklist gets cut off.
 const PREVIEW_CHECKLIST_ITEMS = 16;
+
+// style.css carries the build it was shipped with. If it disagrees with this
+// file, the two came from different deploys and the UI will be subtly wrong in
+// ways that look like bugs — unstyled controls, the wrong theme — so say so
+// rather than leaving it to be rediscovered.
+const CSS_BUILD = (() => {
+  try {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue('--build').trim().replace(/^["']|["']$/g, '');
+  } catch (e) { return ''; }
+})();
+function cssMismatch() { return !!CSS_BUILD && CSS_BUILD !== BUILD_ID; }
+if (cssMismatch()) {
+  console.warn('[nk] stylesheet/script build mismatch: style.css is ' + CSS_BUILD +
+               ' but app.js is ' + BUILD_ID + ' — deploy the whole public/ folder.');
+}
 
 /* ================= Utilities ================= */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -1083,6 +1099,7 @@ async function buildDiagnostics() {
   const L = [];
   const yn = (v) => (v ? 'yes' : 'NO');
   L.push('build       ' + BUILD_ID);
+  L.push('stylesheet  ' + (CSS_BUILD || 'unknown') + (cssMismatch() ? '   <-- MISMATCH' : ''));
   L.push('origin      ' + window.location.origin);
   L.push('secure ctx  ' + yn(window.isSecureContext));
   L.push('online      ' + yn(navigator.onLine));
