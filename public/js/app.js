@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-03.10';
+const BUILD_ID = '2026-08-03.12';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -1143,9 +1143,30 @@ function toggleDiagnostics() {
 // way on desktop. Kept rather than deleted because the build number is the only
 // thing that proves a deploy actually landed, and it is the way into the
 // diagnostics panel.
+// Debug mode is off for everyone by default, and sticky per device once turned
+// on: visit <app-url>/#debug to enable, /#debug-off to disable. The hash is
+// stripped afterwards so it does not linger in the PWA's start URL. The build
+// number also always goes to the console, so it is readable even with the
+// stamp hidden.
+const DEBUG_KEY = 'nk_debug';
+function debugModeEnabled() {
+  try {
+    const h = (window.location.hash || '').toLowerCase();
+    if (h === '#debug') localStorage.setItem(DEBUG_KEY, '1');
+    else if (h === '#debug-off') localStorage.removeItem(DEBUG_KEY);
+    if (h === '#debug' || h === '#debug-off') {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    return localStorage.getItem(DEBUG_KEY) === '1';
+  } catch (e) {
+    return false; // private mode with storage denied: just stay hidden
+  }
+}
+
 function updateBuildStamp() {
   const badge = document.getElementById('buildStamp');
   if (!badge) return;
+  badge.classList.toggle('visible', debugModeEnabled());
   // Just the build number. It is the one thing worth reading at a glance —
   // proof that a deploy landed — and it is the only reason this line exists.
   // Worker state and shell counts moved into the diagnostics panel behind a

@@ -7,10 +7,31 @@
   "scripts": {
     "start": "node server.js"
   },
+  "keywords": [
+    "notes",
+    "nextcloud",
+    "webdav",
+    "pwa",
+    "self-hosted",
+    "google-keep",
+    "offline-first"
+  ],
+  "author": "MtoseD",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MtoseD/notekeep.git"
+  },
+  "homepage": "https://github.com/MtoseD/notekeep#readme",
+  "bugs": {
+    "url": "https://github.com/MtoseD/notekeep/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "webdav": "^5.6.0"
-  },
-  "license": "MIT"
+  }
 }

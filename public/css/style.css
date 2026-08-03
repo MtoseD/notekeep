@@ -150,11 +150,15 @@ html[data-theme="dark"] .nav-item.active{ background:var(--surface-2); color:var
 
 /* Build number + service-worker state. Tappable: opens the diagnostics panel.
    Padding is the tap target — the text alone is far too small to hit. */
+/* Hidden for everyone unless debug mode is on for this device (see
+   debugModeEnabled in app.js: visit /#debug). Tapping it opens diagnostics. */
 .build-stamp{
+  display:none;
   margin-top:auto; padding:16px 20px 12px; font-size:11px;
   color:var(--text-dim); opacity:.6; line-height:1.4;
   cursor:pointer; -webkit-user-select:none; user-select:none;
 }
+.build-stamp.visible{ display:block; }
 .build-stamp:active{ opacity:1; }
 .sidebar.collapsed .build-stamp{ display:none; }
 /* The options button overlays the right end of the row rather than sitting in

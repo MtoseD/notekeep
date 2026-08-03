@@ -1,9 +1,27 @@
 # NoteKeep
 
-A self-hosted, Google Keep–style notes app. Pin notes, color them, turn them
-into checklists, archive/trash them, drag-reorder them in a masonry grid —
-and it's all yours: no Google account, no telemetry, no third-party servers.
-Your notes live in **your own Nextcloud** as a plain JSON file.
+A self-hosted, Google Keep–style notes app that stores your notes in **your own
+Nextcloud** as a single plain JSON file. Pin them, colour them, turn them into
+checklists, label, archive, trash and drag-reorder them in a masonry grid.
+
+No Google account, no telemetry, no third-party servers, no CDNs at runtime.
+Installs as a PWA on phone and desktop and works offline.
+
+![NoteKeep](docs/screenshot.png)
+
+![license](https://img.shields.io/badge/license-MIT-blue)
+![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
+![dependencies](https://img.shields.io/badge/runtime%20deps-3-brightgreen)
+
+## Requirements
+
+- A **Nextcloud** you can create an app password on
+- **Node.js 18+** (or Docker) on a machine your devices can reach
+- For offline support: a way to serve it over **HTTPS with a certificate your
+  devices trust** — see step 4, this part is not optional
+
+Three runtime dependencies (`express`, `webdav`, `dotenv`). No build step, no
+bundler, no framework.
 
 ## How it works
 
@@ -135,10 +153,15 @@ same notes.
 
 ### Checking it actually worked
 
-Open the menu; the bottom of the sidebar shows the running build, e.g.
-`Build 2026-08-03.9`. That number is how you confirm a deploy actually landed —
-if it has not changed, the new files have not reached the browser, and nothing
-else you observe is meaningful yet.
+Add `#debug` to the app URL once — e.g. `https://notes.example.com/#debug`.
+That enables debug mode for that device and stays on until you visit
+`#debug-off`; nothing is shown to anyone who has not opted in. The build number
+then appears at the bottom of the sidebar.
+
+That number is how you confirm an update actually reached the browser. If it
+has not changed, nothing else you observe is meaningful yet — check that before
+concluding anything about a change. (It is also always printed to the browser
+console at startup.)
 
 Tapping it opens a diagnostics panel: origin, secure context, service worker
 state, cached shell files, notes held locally. The field to read there is the
@@ -222,3 +245,18 @@ Even without Nextcloud, you can sanity-check the UI: point `.env` at any
 WebDAV server you have (or skip real sync and just poke around — the app
 will show "offline" but stays fully usable, since everything also lives in
 local IndexedDB).
+
+## Contributing
+
+Issues and pull requests are welcome. The whole app is four files worth
+reading: `server.js`, `public/index.html`, `public/js/app.js` and
+`public/sw.js`. There is no build step — edit a file and reload.
+
+If you change anything under `public/`, bump `BUILD_ID` at the top of
+`public/js/app.js`, and bump `CACHE` in `public/sw.js` if you touch the service
+worker. The build number is the only way to tell a deploy apart from a cached
+copy, and debugging without it wastes hours.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
