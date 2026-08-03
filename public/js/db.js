@@ -1,3 +1,10 @@
+// NoteKeep - self-hosted notes synced to your own Nextcloud.
+// Copyright (C) 2026 MtoseD
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Free software under the GNU AGPL v3 or later; see LICENSE. Comes with
+// ABSOLUTELY NO WARRANTY. If you run a modified version for others over a
+// network, AGPL section 13 requires you to offer them its source.
+
 // Minimal promise-based key/value store on top of IndexedDB.
 // Used to cache the notes dataset locally so the app works offline and
 // loads instantly, independent of the Nextcloud round trip.

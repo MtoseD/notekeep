@@ -1,6 +1,13 @@
+// NoteKeep - self-hosted notes synced to your own Nextcloud.
+// Copyright (C) 2026 MtoseD
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Free software under the GNU AGPL v3 or later; see LICENSE. Comes with
+// ABSOLUTELY NO WARRANTY. If you run a modified version for others over a
+// network, AGPL section 13 requires you to offer them its source.
+
 'use strict';
 
-const BUILD_ID = '2026-08-04.3';
+const BUILD_ID = '2026-08-04.4';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or

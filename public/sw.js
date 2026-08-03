@@ -1,3 +1,10 @@
+// NoteKeep - self-hosted notes synced to your own Nextcloud.
+// Copyright (C) 2026 MtoseD
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Free software under the GNU AGPL v3 or later; see LICENSE. Comes with
+// ABSOLUTELY NO WARRANTY. If you run a modified version for others over a
+// network, AGPL section 13 requires you to offer them its source.
+
 // Tied to BUILD_ID in app.js on purpose — bump both together, every time.
 // This was a hand-maintained 'v5' for many deploys, and because fillShellCache
 // skips files already present, a stylesheet cached when v5 was created was
@@ -6,7 +13,7 @@
 // indefinitely against a correctly deployed server — which is exactly what
 // happened: new markup from app.js, old rules from style.css, and a control
 // rendering unstyled with no way to tell why.
-const CACHE = 'notekeep-shell-2026-08-04.3';
+const CACHE = 'notekeep-shell-2026-08-04.4';
 const SHELL_FILES = [
   '/',
   '/index.html',

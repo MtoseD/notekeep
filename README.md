@@ -18,7 +18,7 @@ Installs as a PWA on phone and desktop and works offline.
   </tr>
 </table>
 
-![license](https://img.shields.io/badge/license-MIT-blue)
+![license](https://img.shields.io/badge/license-AGPL--3.0-blue)
 ![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![dependencies](https://img.shields.io/badge/runtime%20deps-3-brightgreen)
 
@@ -248,7 +248,17 @@ copy, and debugging without it wastes hours.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+**GNU AGPL v3 or later** — see [LICENSE](LICENSE). Free software: you may use,
+study, modify and share it.
+
+Copyleft, and specifically the *network* variant. If you modify NoteKeep and
+run it for other people — even without ever distributing a copy — section 13
+requires you to offer those users the source of your version. Plain GPL leaves
+that gap open for server software, which is why the FSF recommends the AGPL
+here, and why Nextcloud uses it too.
+
+The vendored [SortableJS](public/js/vendor/Sortable.min.js) remains under its
+own MIT licence.
 
 ## Built with
 

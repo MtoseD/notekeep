@@ -1,3 +1,10 @@
+// NoteKeep - self-hosted notes synced to your own Nextcloud.
+// Copyright (C) 2026 MtoseD
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Free software under the GNU AGPL v3 or later; see LICENSE. Comes with
+// ABSOLUTELY NO WARRANTY. If you run a modified version for others over a
+// network, AGPL section 13 requires you to offer them its source.
+
 // NoteKeep server
 // Serves the PWA frontend and proxies note data to a Nextcloud WebDAV folder.
 // All Nextcloud credentials stay on the server — the browser never talks to

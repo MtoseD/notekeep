@@ -1,10 +1,19 @@
+/*
+ * NoteKeep - self-hosted notes synced to your own Nextcloud.
+ * Copyright (C) 2026 MtoseD
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * Free software under the GNU AGPL v3 or later; see LICENSE. Comes with
+ * ABSOLUTELY NO WARRANTY. If you run a modified version for others over a
+ * network, AGPL section 13 requires you to offer them its source.
+ */
+
 /* ---------- Tokens ---------- */
 :root{
   /* Must match BUILD_ID in app.js. Read back at startup to detect a
      stylesheet and script from different deploys — a mismatch has three
      times now presented as a mystery bug (unstyled controls, a light
      theme, "everything is broken") rather than as what it is. */
-  --build:"2026-08-04.3";
+  --build:"2026-08-04.4";
   --bg:#F2EFE9;
   --surface:#FFFFFF;
   --surface-2:#EDEAE3;

@@ -17,7 +17,7 @@
     "offline-first"
   ],
   "author": "MtoseD",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "https://github.com/MtoseD/notekeep.git"
