@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-03.1';
+const BUILD_ID = '2026-08-03.4';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -980,11 +980,28 @@ function addLabelFromPopover() {
 }
 
 /* ================= Theme ================= */
+// Dark unless you have explicitly chosen otherwise with the toggle.
+//
+// Deliberately a NEW storage key. The previous code called applyTheme() on
+// every load and persisted the result — including the automatic default — so
+// every existing install already holds a value under 'nk_theme' that is
+// indistinguishable from a deliberate choice. Reading that key would pin those
+// installs to whatever the OS happened to say the first time the app was ever
+// opened, and changing the default here would silently do nothing on exactly
+// the devices that matter. The old key is left untouched so rolling this build
+// back restores the previous behaviour intact.
+const THEME_KEY = 'nk_theme_v2';
+const DEFAULT_THEME = 'dark';
+
 const themeBtn = document.getElementById('themeBtn');
-function applyTheme(t) { document.documentElement.setAttribute('data-theme', t); localStorage.setItem('nk_theme', t); }
+// `remember` is only true for an explicit toggle — never for the default.
+function applyTheme(t, remember) {
+  document.documentElement.setAttribute('data-theme', t);
+  if (remember) localStorage.setItem(THEME_KEY, t);
+}
 themeBtn.addEventListener('click', () => {
   const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-  applyTheme(cur);
+  applyTheme(cur, true);
 });
 
 /* ================= Sync UI ================= */
@@ -1145,7 +1162,7 @@ function warnIfOfflineImpossible() {
 async function init() {
   document.getElementById('buildStamp').textContent = 'Build ' + BUILD_ID;
   updateBuildBadge();
-  applyTheme(localStorage.getItem('nk_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  applyTheme(localStorage.getItem(THEME_KEY) || DEFAULT_THEME, false);
   resetComposer();
 
   try {
