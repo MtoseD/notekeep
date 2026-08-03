@@ -108,7 +108,18 @@ app.put('/api/data', async (req, res) => {
   }
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// The shell is a handful of small files that change on every deploy, and a
+// stale one is worse than a slow one: an old app.js running against a new
+// index.html breaks in ways that look nothing like a caching problem. The
+// default here was "public, max-age=0", which lets a shared cache — a reverse
+// proxy — store the response and, if it is configured to, serve it on. Say
+// no-cache instead: still cached, but never reused without revalidating with
+// us first. ETag/Last-Modified still make that a cheap 304.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+  },
+}));
 
 app.listen(PORT, () => {
   console.log(`NoteKeep running on http://localhost:${PORT}`);
