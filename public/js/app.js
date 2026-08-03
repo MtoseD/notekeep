@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-03.7';
+const BUILD_ID = '2026-08-03.8';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -1164,7 +1164,34 @@ function warnIfOfflineImpossible() {
   document.body.appendChild(bar);
 }
 
+// Registered before anything else, and deliberately independent of everything
+// else. This used to sit at the end of init(), which meant a single throw
+// anywhere above it — a DOM id that moved between a deploy's index.html and its
+// app.js, a bad cached note, one unguarded lookup — silently cost the app its
+// service worker, and with it the cache and the ability to open away from home.
+// Nothing on screen said so, and the app looked fine until you were somewhere
+// with no route to the server. Touches no DOM and no network, so there is
+// nothing here for the rest of the app to break.
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    navigator.serviceWorker.register('/sw.js')
+      .then(updateBuildStamp)
+      // Swallowing this was hiding the most useful sentence available: a proxy
+      // CSP, a bad MIME type on sw.js or a scope violation all land here.
+      .catch((e) => { SW_ERROR = (e && e.message) || String(e); updateBuildStamp(); });
+    navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildStamp(); checkShellCache(); });
+    // "pending" resolves to "offline-ready" shortly after first install
+    setTimeout(() => { updateBuildStamp(); checkShellCache(); }, 3000);
+    checkShellCache();
+  } catch (e) {
+    SW_ERROR = (e && e.message) || String(e);
+  }
+}
+
 async function init() {
+  registerServiceWorker();
+
   updateBuildStamp();
   applyTheme(localStorage.getItem(THEME_KEY) || DEFAULT_THEME, false);
   resetComposer();
@@ -1180,27 +1207,19 @@ async function init() {
   purgeOldTrash();
   render();
 
-  // Everything below must be wired up BEFORE the first network round-trip.
-  // Off the home network the server is unreachable and those requests hang
-  // until they time out; anything awaited after them (the service worker
-  // registration in particular) would simply not happen for that whole
-  // window, which is how the app ends up with no offline shell to launch
-  // from next time.
-  warnIfOfflineImpossible();
-  const stamp = document.getElementById('buildStamp');
-  if (stamp) stamp.addEventListener('click', toggleDiagnostics);
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js')
-      .then(updateBuildStamp)
-      // Swallowing this was hiding the most useful sentence available: a proxy
-      // CSP, a bad MIME type on sw.js or a scope violation all land here.
-      .catch((e) => { SW_ERROR = (e && e.message) || String(e); updateBuildStamp(); });
-    navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildStamp(); checkShellCache(); });
-    // "pending" resolves to "offline-ready" shortly after first install
-    setTimeout(() => { updateBuildStamp(); checkShellCache(); }, 3000);
-    checkShellCache();
+  // Cosmetic wiring — isolated so it can never take anything else down.
+  try {
+    warnIfOfflineImpossible();
+    const stamp = document.getElementById('buildStamp');
+    if (stamp) stamp.addEventListener('click', toggleDiagnostics);
+  } catch (e) {
+    console.warn('Non-fatal UI wiring failed:', e);
   }
 
+  // These must be wired up BEFORE the first network round-trip: off the home
+  // network the server is unreachable and those requests hang until they time
+  // out, and anything awaited after them would not happen for that whole
+  // window.
   setInterval(() => { if (document.visibilityState === 'visible') pullFromServer(false); }, 20000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullFromServer(false); });
   window.addEventListener('online', () => pullFromServer(false));
