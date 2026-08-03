@@ -1,4 +1,12 @@
-const CACHE = 'notekeep-shell-v5';
+// Tied to BUILD_ID in app.js on purpose — bump both together, every time.
+// This was a hand-maintained 'v5' for many deploys, and because fillShellCache
+// skips files already present, a stylesheet cached when v5 was created was
+// never replaced by the precache. Only the runtime handler could refresh it,
+// and only when the network won its race, so a stale style.css could survive
+// indefinitely against a correctly deployed server — which is exactly what
+// happened: new markup from app.js, old rules from style.css, and a control
+// rendering unstyled with no way to tell why.
+const CACHE = 'notekeep-shell-2026-08-04.3';
 const SHELL_FILES = [
   '/',
   '/index.html',
@@ -62,10 +70,12 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
+    // Fill the new cache BEFORE dropping the old ones, so there is never a
+    // moment with no usable shell — deleting first would leave the app unable
+    // to cold start if the network died mid-activate.
+    await caches.open(CACHE).then(fillShellCache);
     const keys = await caches.keys();
     await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
-    // Second chance to complete the shell if install hit a bad network.
-    await caches.open(CACHE).then(fillShellCache);
     await self.clients.claim();
   })());
 });
