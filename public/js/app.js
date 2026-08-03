@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-03.9';
+const BUILD_ID = '2026-08-03.10';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -564,21 +564,69 @@ function setView(v) {
   render();
 }
 
+// Label options menu. Built here rather than in index.html so this stays a
+// single-file change — index.html/app.js deploy coupling has broken this app
+// twice. Reuses the shared .popover machinery, so hideAllPopovers() and the
+// click-outside handler pick it up for free.
+let labelMenuTarget = null;
+let labelMenuPopover = null;
+function ensureLabelMenuPopover() {
+  if (labelMenuPopover) return labelMenuPopover;
+  const pop = document.createElement('div');
+  pop.className = 'popover hidden';
+  pop.id = 'labelMenuPopover';
+  pop.innerHTML =
+    '<button class="popover-item" data-act="label-rename">Rename label</button>' +
+    '<button class="popover-item" data-act="label-delete">Delete label</button>';
+  pop.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    hideAllPopovers();
+    if (!labelMenuTarget) return;
+    if (btn.dataset.act === 'label-rename') renameLabel(labelMenuTarget);
+    else deleteLabel(labelMenuTarget);
+  });
+  document.body.appendChild(pop);
+  labelMenuPopover = pop;
+  return pop;
+}
+function openLabelMenu(anchor, labelId) {
+  const pop = ensureLabelMenuPopover();
+  hideAllPopovers();
+  labelMenuTarget = labelId;
+  positionPopover(pop, anchor);
+}
+
 function renderSidebarLabels() {
   const list = document.getElementById('labelList');
   list.innerHTML = '';
   DATA.labels.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((l) => {
+    // The row is a wrapper, not a button: the options button cannot be nested
+    // inside the label button (invalid, and the clicks fight each other), so it
+    // sits alongside and is positioned over the row's right edge in CSS.
+    const wrap = document.createElement('div');
+    wrap.className = 'label-row';
+
     const row = document.createElement('button');
     row.className = 'label-item' + (VIEW.type === 'label' && VIEW.labelId === l.id ? ' active' : '');
     row.innerHTML = `<svg viewBox="0 0 24 24"><path d="M20.6 12.6L12 21.2 2.8 12 11.4 3.4 20.6 12.6z"/><circle cx="8.5" cy="8.5" r="1.3"/></svg><span>${escapeHtml(l.name)}</span>`;
     row.addEventListener('click', () => setView({ type: 'label', labelId: l.id }));
-    row.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      const choice = window.prompt('Type "rename" or "delete" for label "' + l.name + '"');
-      if (choice === 'rename') renameLabel(l.id);
-      else if (choice === 'delete') deleteLabel(l.id);
-    });
-    list.appendChild(row);
+
+    // Replaces a contextmenu handler that asked you to *type* "rename" or
+    // "delete" into a prompt. iOS does not reliably fire contextmenu — long
+    // press shows the system callout instead — so on a phone renaming or
+    // deleting a label was simply unreachable.
+    const menu = document.createElement('button');
+    menu.type = 'button';
+    menu.className = 'label-menu-btn popover-trigger';
+    menu.title = 'Label options';
+    menu.setAttribute('aria-label', 'Options for label ' + l.name);
+    menu.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>';
+    menu.addEventListener('click', (e) => { e.stopPropagation(); openLabelMenu(menu, l.id); });
+
+    wrap.appendChild(row);
+    wrap.appendChild(menu);
+    list.appendChild(wrap);
   });
 }
 document.getElementById('addLabelBtn').addEventListener('click', () => {

@@ -157,11 +157,29 @@ html[data-theme="dark"] .nav-item.active{ background:var(--surface-2); color:var
 }
 .build-stamp:active{ opacity:1; }
 .sidebar.collapsed .build-stamp{ display:none; }
+/* The options button overlays the right end of the row rather than sitting in
+   the flow, so the label pill keeps its original shape and width. */
+.label-row{ position:relative; display:flex; align-items:center; }
 .label-item{
   display:flex; align-items:center; gap:20px; width:100%;
-  padding:0 20px; height:40px; border-radius:0 22px 22px 0;
+  padding:0 44px 0 20px; height:40px; border-radius:0 22px 22px 0;
   background:transparent; border:none; color:var(--text); cursor:pointer;
   font-size:14.5px; text-align:left;
+}
+.label-item span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.label-menu-btn{
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  width:30px; height:30px; border-radius:50%; border:none; background:transparent;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--text-dim); cursor:pointer; opacity:0; transition:opacity .12s;
+}
+.label-menu-btn svg{ width:16px; height:16px; }
+.label-row:hover .label-menu-btn{ opacity:1; }
+.label-menu-btn:hover{ background:var(--surface-2); color:var(--text); }
+/* No hover on touch, so it has to be permanently visible there — this is the
+   only way to rename or delete a label on a phone. */
+@media (pointer: coarse), (max-width: 880px){
+  .label-menu-btn{ opacity:1; }
 }
 .label-item:hover{ background:var(--surface-2); }
 .label-item.active{ background:var(--c-sand); font-weight:600; }
