@@ -1,6 +1,6 @@
 'use strict';
 
-const BUILD_ID = '2026-08-03.8';
+const BUILD_ID = '2026-08-03.9';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -1098,18 +1098,13 @@ function toggleDiagnostics() {
 function updateBuildStamp() {
   const badge = document.getElementById('buildStamp');
   if (!badge) return;
-  let sw;
-  if (!window.isSecureContext) sw = 'no-https!';           // SW impossible on this origin
-  else if (!('serviceWorker' in navigator)) sw = 'no-sw (untrusted cert?)';
-  else if (navigator.serviceWorker.controller) sw = 'offline-ready';
-  else sw = 'sw-pending';                                   // registered but not controlling yet (reload once)
-  let text = 'Build ' + BUILD_ID + ' · ' + sw;
-  // "offline-ready" only means a worker is controlling the page — it says
-  // nothing about whether the shell is actually IN the cache. Show the real
-  // count, because a controlling worker over an empty cache still cannot cold
-  // start, and that combination is otherwise invisible.
-  if (SHELL_STATUS) text += ' · shell ' + SHELL_STATUS.have + '/' + SHELL_STATUS.total;
-  badge.textContent = text;
+  // Just the build number. It is the one thing worth reading at a glance —
+  // proof that a deploy landed — and it is the only reason this line exists.
+  // Worker state and shell counts moved into the diagnostics panel behind a
+  // tap: useful when something is wrong, jargon the rest of the time. The
+  // case that must not be missed, offline being impossible at all, already
+  // announces itself in a banner.
+  badge.textContent = 'Build ' + BUILD_ID;
 }
 
 // Ask the worker to top up the shell cache and tell us what it holds.
@@ -1119,7 +1114,6 @@ function checkShellCache() {
   const ch = new MessageChannel();
   ch.port1.onmessage = (e) => {
     SHELL_STATUS = e.data;
-    updateBuildStamp();
     if (e.data && e.data.missing && e.data.missing.length) {
       console.warn('[nk] shell cache incomplete, missing:', e.data.missing);
     }
@@ -1176,13 +1170,12 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
     navigator.serviceWorker.register('/sw.js')
-      .then(updateBuildStamp)
       // Swallowing this was hiding the most useful sentence available: a proxy
       // CSP, a bad MIME type on sw.js or a scope violation all land here.
-      .catch((e) => { SW_ERROR = (e && e.message) || String(e); updateBuildStamp(); });
-    navigator.serviceWorker.addEventListener('controllerchange', () => { updateBuildStamp(); checkShellCache(); });
+      .catch((e) => { SW_ERROR = (e && e.message) || String(e); });
+    navigator.serviceWorker.addEventListener('controllerchange', checkShellCache);
     // "pending" resolves to "offline-ready" shortly after first install
-    setTimeout(() => { updateBuildStamp(); checkShellCache(); }, 3000);
+    setTimeout(checkShellCache, 3000);
     checkShellCache();
   } catch (e) {
     SW_ERROR = (e && e.message) || String(e);

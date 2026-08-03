@@ -135,10 +135,14 @@ same notes.
 
 ### Checking it actually worked
 
-Tap the small version badge in the bottom-right corner. It reads e.g.
-`v2026-08-03.1 · offline-ready · shell 11/11`, and tapping it opens a
-diagnostics panel (origin, secure context, service worker state, cached files,
-notes cached locally). What the middle field means:
+Open the menu; the bottom of the sidebar shows the running build, e.g.
+`Build 2026-08-03.9`. That number is how you confirm a deploy actually landed —
+if it has not changed, the new files have not reached the browser, and nothing
+else you observe is meaningful yet.
+
+Tapping it opens a diagnostics panel: origin, secure context, service worker
+state, cached shell files, notes held locally. The field to read there is the
+service worker line:
 
 - `offline-ready · shell 11/11` — cached and good. Close the app fully and
   reopen it with the server unreachable to confirm.
