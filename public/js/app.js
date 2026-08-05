@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-08-04.4';
+const BUILD_ID = '2026-08-05.1';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -774,11 +774,30 @@ function commitComposer() {
   render();
 }
 document.getElementById('composerCloseBtn').addEventListener('click', commitComposer);
+// Clicking outside the open composer commits it, like Keep does.
+//
+// Decided from the event's dispatch path rather than from where the clicked
+// node is *now*. Handlers inside the composer rebuild their lists — "+ Add
+// item" and the checkbox toggles call renderComposerChecklist(), the label
+// popover calls renderLabelPopoverList() — which detaches the very element
+// that was clicked. By the time this listener runs, composer.contains(target)
+// and target.closest('.popover') both say "outside" for a click that plainly
+// happened inside, so the composer committed itself and closed mid-edit.
+// composedPath() is fixed when the event is dispatched and survives that.
 document.addEventListener('click', (e) => {
-  if (!composer.contains(e.target) && !composerActions.classList.contains('hidden')) {
-    // clicking outside the open composer commits it, like Keep does
-    if (!e.target.closest('.popover')) commitComposer();
+  if (composerActions.classList.contains('hidden')) return;
+
+  const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+  if (path.length) {
+    for (const node of path) {
+      if (node === composer) return;
+      if (node.nodeType === 1 && node.classList && node.classList.contains('popover')) return;
+    }
+  } else {
+    if (composer.contains(e.target)) return;
+    if (e.target.closest && e.target.closest('.popover')) return;
   }
+  commitComposer();
 });
 
 /* ================= Editor ================= */

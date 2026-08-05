@@ -1,6 +1,6 @@
 {
   "name": "notekeep",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A self-hosted, Google Keep-like notes app that syncs to Nextcloud via WebDAV.",
   "main": "server.js",
   "type": "commonjs",
