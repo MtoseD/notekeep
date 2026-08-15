@@ -13,7 +13,7 @@
      stylesheet and script from different deploys — a mismatch has three
      times now presented as a mystery bug (unstyled controls, a light
      theme, "everything is broken") rather than as what it is. */
-  --build:"2026-08-16.2";
+  --build:"2026-08-16.3";
   --bg:#F2EFE9;
   --surface:#FFFFFF;
   --surface-2:#EDEAE3;
@@ -355,10 +355,16 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
 .editor{
   position:relative; z-index:1; margin:2.5vh 0;
   width:min(600px, 94vw); max-height:calc(100% - 5vh);
-  overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+  overflow-y:auto; overscroll-behavior:contain;
   background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow-lift);
   padding:0 20px; display:flex; flex-direction:column;
 }
+/* Nothing in the editor may be compressed by the flex column. This has a
+   definite height, so children shrink to fit by default — and a squashed child
+   draws more than it measures, so scrollHeight under-reports and the note only
+   scrolls "a bit" before stopping short of its own end. The note cards had the
+   same fault; the answer is the same. */
+.editor > *{ flex:none; }
 /* Belt and braces with lockBackgroundScroll(): nothing behind the editor moves. */
 html.editor-open, body.editor-open{ overflow:hidden; }
 /* Title and action bar stay put while the note scrolls between them. The
