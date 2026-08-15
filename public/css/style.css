@@ -13,7 +13,7 @@
      stylesheet and script from different deploys — a mismatch has three
      times now presented as a mystery bug (unstyled controls, a light
      theme, "everything is broken") rather than as what it is. */
-  --build:"2026-08-05.1";
+  --build:"2026-08-15.1";
   --bg:#F2EFE9;
   --surface:#FFFFFF;
   --surface-2:#EDEAE3;
@@ -336,27 +336,49 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
 .empty-state p{ font-size:15px; margin:0; }
 
 /* ---------- Editor overlay ---------- */
-.overlay{ position:fixed; inset:0; z-index:100; display:flex; align-items:flex-start; justify-content:center; }
-.editor-scrim{ position:absolute; inset:0; background:rgba(20,18,14,.5); }
+/* The overlay, not the editor, is the scroll container, and its height comes
+   from visualViewport (--vvh, see syncViewportHeight) rather than 100vh — with
+   a soft keyboard open those differ by the height of the keyboard, and sizing
+   to 100vh is what pushed the note's top off screen. overscroll-behavior
+   keeps a swipe that reaches the end from handing the scroll to the page. */
+.overlay{
+  position:fixed; inset:0; z-index:100;
+  height:var(--vvh, 100%);
+  display:flex; align-items:flex-start; justify-content:center;
+  overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+}
+.editor-scrim{ position:fixed; inset:0; background:rgba(20,18,14,.5); }
 .editor{
-  position:relative; z-index:1; margin-top:2.5vh;
-  width:min(600px, 94vw); max-height:95vh; overflow-y:auto;
+  position:relative; z-index:1; margin:2.5vh 0;
+  width:min(600px, 94vw);
   background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow-lift);
   padding:18px 20px 10px; display:flex; flex-direction:column;
 }
+/* Belt and braces with lockBackgroundScroll(): nothing behind the editor moves. */
+html.editor-open, body.editor-open{ overflow:hidden; }
 .editor-title{ border:none; outline:none; background:transparent; font-size:19px; font-weight:700; color:var(--text); margin-bottom:8px; font-family:inherit; }
 .editor-body{ border:none; outline:none; background:transparent; font-size:15px; line-height:1.6; color:var(--text); resize:none; min-height:46px; overflow:hidden; font-family:inherit; }
 .editor-checklist{ display:flex; flex-direction:column; gap:2px; margin-top:4px; }
-.editor-checklist-row{ display:flex; align-items:center; gap:10px; }
+/* align-items:flex-start, not center: rows can now be several lines tall, and
+   the checkbox and handle belong beside the FIRST line rather than floating in
+   the vertical middle of a wrapped item. */
+.editor-checklist-row{ display:flex; align-items:flex-start; gap:10px; }
 .editor-checklist-row .chk-toggle{
   width:20px; height:20px; border-radius:5px; border:1.8px solid var(--text-dim); flex:none; cursor:pointer;
   background:transparent; display:flex; align-items:center; justify-content:center; color:#fff;
 }
 .editor-checklist-row.checked .chk-toggle{ background:var(--accent); border-color:var(--accent); }
-.editor-checklist-row input{
-  flex:1; border:none; outline:none; background:transparent; font-size:14.5px; color:var(--text); font-family:inherit; padding:6px 0;
+.editor-checklist-row textarea{
+  flex:1; min-width:0; border:none; outline:none; background:transparent;
+  font-size:14.5px; color:var(--text); font-family:inherit; padding:6px 0;
+  resize:none; overflow:hidden; line-height:1.45;
+  white-space:pre-wrap; overflow-wrap:break-word;
 }
-.editor-checklist-row.checked input{ text-decoration:line-through; color:var(--text-dim); }
+.editor-checklist-row.checked textarea{ text-decoration:line-through; color:var(--text-dim); }
+/* Nudge the controls onto the first line's optical centre. */
+.editor-checklist-row .chk-toggle,
+.editor-checklist-row .row-drag,
+.editor-checklist-row .row-remove{ margin-top:5px; }
 .editor-checklist-row .row-drag{ cursor:grab; color:var(--text-dim); flex:none; width:16px; height:16px; }
 .editor-checklist-row .row-remove{ opacity:0; width:26px; height:26px; border-radius:50%; border:none; background:transparent; color:var(--text-dim); cursor:pointer; flex:none; display:flex; align-items:center; justify-content:center; }
 .editor-checklist-row:hover .row-remove{ opacity:1; }
@@ -433,12 +455,11 @@ html[data-theme="dark"] .toast{ background:var(--surface-2); color:var(--text); 
 @media (max-width:520px){
   .brand{ display:none; }
   .editor{
-    margin-top:0; width:100%; border-radius:0;
-    max-height:100vh; height:auto; min-height:40vh;
+    margin:0; width:100%; border-radius:0;
+    min-height:100%;
     padding-top:calc(18px + env(safe-area-inset-top));
     padding-bottom:calc(10px + env(safe-area-inset-bottom));
   }
-  .overlay{ align-items:stretch; }
 }
 
 /* iOS zooms the page in whenever you focus a text field smaller than 16px, and
@@ -460,7 +481,7 @@ html[data-theme="dark"] .toast{ background:var(--surface-2); color:var(--text); 
   .composer-title,
   .composer-body,
   .editor-body,
-  .editor-checklist-row input,
+  .editor-checklist-row textarea,
   .label-popover-create input{ font-size:16px; }
   .editor-title{ font-size:19px; }   /* already above the threshold; keep it big */
 }

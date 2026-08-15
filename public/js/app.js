@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-08-05.1';
+const BUILD_ID = '2026-08-15.1';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -54,7 +54,17 @@ const COLORS = [
 /* ================= State ================= */
 let DATA = { notes: [], labels: [] };
 let SERVER_VERSION = null;
+// "We hold edits the server has not accepted yet." This lives in IndexedDB as
+// well as memory: it used to be memory-only, so closing the app threw it away
+// while the unsynced edits themselves stayed in the cache. On the next launch
+// DIRTY was false, the pull below took the "server wins" branch, and those
+// edits were overwritten by an older server copy — silent data loss, and the
+// reported "sync deleted everything / went back to the server version".
 let DIRTY = false;
+async function setDirty(v) {
+  DIRTY = v;
+  try { await NKDB.set('dirty', v); } catch (e) { console.warn('Dirty flag write failed:', e); }
+}
 let VIEW = { type: 'notes' }; // {type:'notes'|'archive'|'trash'|'label', labelId}
 let SEARCH = '';
 let TOKEN = localStorage.getItem('nk_token') || '';
@@ -110,7 +120,14 @@ async function pullFromServer(showToastOnFail) {
     }
     const j = await res.json();
     if (j.version !== SERVER_VERSION) {
-      if (!DIRTY) {
+      // Belt and braces on top of the persisted flag: even when we believe we
+      // have nothing outstanding, refuse to replace a note with an older copy.
+      // Getting DIRTY wrong for any reason must not cost anyone their notes.
+      const localNewer = (DATA.notes || []).some((n) => {
+        const r = ((j.data && j.data.notes) || []).find((x) => x.id === n.id);
+        return !r || (n.updatedAt || 0) > (r.updatedAt || 0);
+      });
+      if (!DIRTY && !localNewer) {
         DATA = j.data && j.data.notes ? j.data : DATA;
         SERVER_VERSION = j.version;
         render();
@@ -166,7 +183,7 @@ const pushToServer = debounce(async () => {
     if (!res.ok) throw new Error('push failed ' + res.status);
     const j = await res.json();
     SERVER_VERSION = j.version;
-    DIRTY = false;
+    await setDirty(false);
     cacheLocally(DATA, SERVER_VERSION);
     setSyncStatus('ok');
   } catch (e) {
@@ -192,7 +209,7 @@ function mergeData(local, remote) {
 
 /* ================= Persistence ================= */
 async function saveLocal() {
-  DIRTY = true;
+  await setDirty(true);
   try { await NKDB.set('data', DATA); } catch (e) { console.warn('Local cache write failed:', e); }
   pushToServer();
 }
@@ -727,16 +744,16 @@ function renderComposerChecklist() {
   draft.items.forEach((item, idx) => {
     const row = document.createElement('div');
     row.className = 'editor-checklist-row' + (item.checked ? ' checked' : '');
-    row.innerHTML = `<button class="chk-toggle" data-idx="${idx}"></button><input type="text" value="${escapeHtml(item.text)}" placeholder="List item">`;
-    const input = row.querySelector('input');
-    input.addEventListener('input', () => { item.text = input.value; });
+    row.innerHTML = `<button class="chk-toggle" data-idx="${idx}"></button><textarea rows="1" placeholder="List item">${escapeHtml(item.text)}</textarea>`;
+    const input = row.querySelector('textarea');
+    input.addEventListener('input', () => { item.text = input.value; autoGrowRow(input); });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         draft.items.splice(idx + 1, 0, { id: uid(), text: '', checked: false });
         renderComposerChecklist();
         setTimeout(() => {
-          const inputs = composerChecklist.querySelectorAll('input');
+          const inputs = composerChecklist.querySelectorAll('textarea');
           if (inputs[idx + 1]) inputs[idx + 1].focus();
         }, 0);
       } else if (e.key === 'Backspace' && input.value === '' && draft.items.length > 1) {
@@ -744,7 +761,7 @@ function renderComposerChecklist() {
         draft.items.splice(idx, 1);
         renderComposerChecklist();
         setTimeout(() => {
-          const inputs = composerChecklist.querySelectorAll('input');
+          const inputs = composerChecklist.querySelectorAll('textarea');
           const focusIdx = Math.max(0, idx - 1);
           if (inputs[focusIdx]) inputs[focusIdx].focus();
         }, 0);
@@ -752,6 +769,7 @@ function renderComposerChecklist() {
     });
     row.querySelector('.chk-toggle').addEventListener('click', () => { item.checked = !item.checked; renderComposerChecklist(); });
     composerChecklist.appendChild(row);
+    autoGrowRow(input);   // now attached, so scrollHeight is meaningful
   });
   const addBtn = document.createElement('button');
   addBtn.className = 'text-btn add-item-btn';
@@ -814,11 +832,47 @@ const editorArchiveBtn = document.getElementById('editorArchiveBtn');
 let editingId = null;
 let checklistSortable = null;
 
+// Checklist rows are textareas, not single-line inputs: an <input> cannot wrap,
+// so any item longer than the row was clipped with no way to read or edit the
+// rest of it. Keep them looking like one line until they need more.
+function autoGrowRow(el) {
+  el.style.height = 'auto';
+  // scrollHeight is 0 while the row is still detached from the document, and
+  // committing that collapses the field to nothing. Only trust a real
+  // measurement; the caller re-runs this once the row is in the DOM.
+  if (el.scrollHeight > 0) el.style.height = el.scrollHeight + 'px';
+}
+
 function autoGrowEditorBody() {
   editorBody.style.height = 'auto';
   editorBody.style.height = editorBody.scrollHeight + 'px';
 }
 editorBody.addEventListener('input', autoGrowEditorBody);
+
+// iOS reports 100vh as the LAYOUT viewport: with the keyboard up, an overlay
+// sized that way is taller than what you can actually see. The browser then
+// scrolls the PAGE to reach the caret, which drags the note's top off screen
+// and leaves the grid behind it moving instead of the note. visualViewport is
+// the only thing that reports the genuinely visible area, so drive the
+// overlay's height from it.
+function syncViewportHeight() {
+  const vv = window.visualViewport;
+  const h = vv ? vv.height : window.innerHeight;
+  document.documentElement.style.setProperty('--vvh', h + 'px');
+}
+syncViewportHeight();
+window.addEventListener('resize', syncViewportHeight);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', syncViewportHeight);
+  window.visualViewport.addEventListener('scroll', syncViewportHeight);
+}
+
+// With the editor open the page behind it must not scroll at all — otherwise a
+// swipe moves the grid, and the note's top ends up somewhere unreachable.
+function lockBackgroundScroll(on) {
+  document.documentElement.classList.toggle('editor-open', on);
+  document.body.classList.toggle('editor-open', on);
+}
 
 function openEditor(id) {
   const n = getNote(id);
@@ -842,6 +896,13 @@ function openEditor(id) {
   }
   renderEditorLabels(n);
   editorOverlay.classList.remove('hidden');
+  lockBackgroundScroll(true);
+  syncViewportHeight();
+  editorOverlay.scrollTop = 0;   // always begin at the note's title
+  // The rows above were built while the overlay was still display:none, where
+  // scrollHeight reads 0 and a wrapped item would stay clipped to one line.
+  // Now that it has a real size, measure them properly.
+  editorChecklist.querySelectorAll('textarea').forEach(autoGrowRow);
   if (n.type === 'text') requestAnimationFrame(autoGrowEditorBody);
   setTimeout(() => (n.title ? editorBody.focus() : editorTitle.focus()), 30);
 }
@@ -855,14 +916,16 @@ function renderEditorChecklist(n) {
     row.innerHTML = `
       <svg class="row-drag" viewBox="0 0 24 24"><path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01"/></svg>
       <button class="chk-toggle"></button>
-      <input type="text" value="${escapeHtml(item.text)}" placeholder="List item">
+      <textarea rows="1" placeholder="List item">${escapeHtml(item.text)}</textarea>
       <button class="row-remove"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     `;
     row.querySelector('.chk-toggle').addEventListener('click', () => {
       toggleChecklistItem(n, item.id); touch(n); saveLocal(); renderEditorChecklist(n); render();
     });
-    const input = row.querySelector('input');
-    input.addEventListener('input', () => { item.text = input.value; touch(n); saveLocal(); });
+    const input = row.querySelector('textarea');
+    input.addEventListener('input', () => {
+      item.text = input.value; autoGrowRow(input); touch(n); saveLocal();
+    });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -871,7 +934,7 @@ function renderEditorChecklist(n) {
         n.items.splice(idx + 1, 0, newItem);
         touch(n); saveLocal(); renderEditorChecklist(n); render();
         setTimeout(() => {
-          const row2 = editorChecklist.querySelector(`[data-id="${newItem.id}"] input`);
+          const row2 = editorChecklist.querySelector(`[data-id="${newItem.id}"] textarea`);
           if (row2) row2.focus();
         }, 0);
       } else if (e.key === 'Backspace' && input.value === '') {
@@ -884,6 +947,7 @@ function renderEditorChecklist(n) {
       removeChecklistItem(n, item.id); touch(n); saveLocal(); renderEditorChecklist(n); render();
     });
     editorChecklist.appendChild(row);
+    autoGrowRow(input);   // now attached, so scrollHeight is meaningful
   });
   if (checklistSortable) checklistSortable.destroy();
   checklistSortable = new Sortable(editorChecklist, {
@@ -933,6 +997,7 @@ function closeEditor() {
   if (n && n.type === 'text' && !n.title.trim() && !n.body.trim()) deleteForever(n.id);
   else if (n && n.type === 'checklist' && !n.title.trim() && !(n.items || []).some((i) => i.text.trim())) deleteForever(n.id);
   editorOverlay.classList.add('hidden');
+  lockBackgroundScroll(false);
   editingId = null;
   render();
 }
@@ -1310,8 +1375,12 @@ async function init() {
   try {
     const cachedData = await NKDB.get('data');
     const cachedVersion = await NKDB.get('version');
+    const cachedDirty = await NKDB.get('dirty');
     if (cachedData) DATA = cachedData;
     if (cachedVersion) SERVER_VERSION = cachedVersion;
+    // Restore it BEFORE the first pull, or that pull discards whatever went
+    // unsynced last session.
+    DIRTY = cachedDirty === true;
   } catch (e) {
     console.warn('Local cache read failed, starting fresh from Nextcloud:', e);
   }
