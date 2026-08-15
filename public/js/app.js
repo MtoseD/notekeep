@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-08-16.1';
+const BUILD_ID = '2026-08-16.2';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -849,23 +849,14 @@ function autoGrowEditorBody() {
 }
 editorBody.addEventListener('input', autoGrowEditorBody);
 
-// iOS reports 100vh as the LAYOUT viewport: with the keyboard up, an overlay
-// sized that way is taller than what you can actually see. The browser then
-// scrolls the PAGE to reach the caret, which drags the note's top off screen
-// and leaves the grid behind it moving instead of the note. visualViewport is
-// the only thing that reports the genuinely visible area, so drive the
-// overlay's height from it.
-function syncViewportHeight() {
-  const vv = window.visualViewport;
-  const h = vv ? vv.height : window.innerHeight;
-  document.documentElement.style.setProperty('--vvh', h + 'px');
-}
-syncViewportHeight();
-window.addEventListener('resize', syncViewportHeight);
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', syncViewportHeight);
-  window.visualViewport.addEventListener('scroll', syncViewportHeight);
-}
+// Sizing the overlay from visualViewport was tried and removed. It reports
+// transient values while the iOS keyboard animates, and one of those would
+// stick: the overlay collapsed to a couple of hundred pixels with the note
+// grid showing through underneath, and its scroll area was too short to
+// scroll. The stylesheet uses 100dvh instead, which tracks the browser chrome
+// without any of that. dvh does not shrink for the keyboard, so a focused
+// field near the bottom can still sit behind it — that is the known trade and
+// it is far better than a broken overlay.
 
 // With the editor open the page behind it must not scroll at all — otherwise a
 // swipe moves the grid, and the note's top ends up somewhere unreachable.
@@ -897,7 +888,6 @@ function openEditor(id) {
   renderEditorLabels(n);
   editorOverlay.classList.remove('hidden');
   lockBackgroundScroll(true);
-  syncViewportHeight();
   editor.scrollTop = 0;   // always begin at the note's title
   // The rows above were built while the overlay was still display:none, where
   // scrollHeight reads 0 and a wrapped item would stay clipped to one line.
