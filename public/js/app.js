@@ -7,13 +7,13 @@
 
 'use strict';
 
-const BUILD_ID = '2026-08-15.1';
+const BUILD_ID = '2026-08-16.1';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
 // above what the .note-checklist max-height can show, so the CSS cap (not this
 // number) is what decides where a long checklist gets cut off.
-const PREVIEW_CHECKLIST_ITEMS = 16;
+const PREVIEW_CHECKLIST_ITEMS = 10;
 
 // style.css carries the build it was shipped with. If it disagrees with this
 // file, the two came from different deploys and the UI will be subtly wrong in
@@ -898,7 +898,7 @@ function openEditor(id) {
   editorOverlay.classList.remove('hidden');
   lockBackgroundScroll(true);
   syncViewportHeight();
-  editorOverlay.scrollTop = 0;   // always begin at the note's title
+  editor.scrollTop = 0;   // always begin at the note's title
   // The rows above were built while the overlay was still display:none, where
   // scrollHeight reads 0 and a wrapped item would stay clipped to one line.
   // Now that it has a real size, measure them properly.

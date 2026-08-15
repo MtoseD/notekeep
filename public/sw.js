@@ -13,7 +13,7 @@
 // indefinitely against a correctly deployed server — which is exactly what
 // happened: new markup from app.js, old rules from style.css, and a control
 // rendering unstyled with no way to tell why.
-const CACHE = 'notekeep-shell-2026-08-15.1';
+const CACHE = 'notekeep-shell-2026-08-16.1';
 const SHELL_FILES = [
   '/',
   '/index.html',
