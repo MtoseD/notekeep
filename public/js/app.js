@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-08-16.5';
+const BUILD_ID = '2026-08-16.6';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -212,64 +212,71 @@ function mergeData(local, remote) {
 
 /* ================= Persistence ================= */
 /* ================= Undo / redo ================= */
-// Snapshots of the whole dataset rather than a log of operations: every
-// mutation already funnels through saveLocal(), so one hook covers editing
-// text, ticking boxes, colours, labels, pin, archive and delete without each
-// having to describe how to reverse itself.
+// Scoped to the note currently open in the editor, and to this sitting with it:
+// opening a note starts a fresh session, closing it discards the history. Undo
+// therefore only ever rewrites the fields of the note you are looking at.
 //
-// BASELINE is the state as of the last entry pushed. Pushing is debounced so a
-// burst of keystrokes collapses into a single undo step instead of one per
-// character — undoing a sentence letter by letter would be useless.
+// This replaced a whole-dataset history, which was both surprising — undo in
+// one note could revert an edit made in another — and dangerous: a snapshot
+// taken before the first sync could restore an empty dataset over everything.
+// Snapshots of a single note cannot express "no notes at all", so that class of
+// failure is gone by construction rather than by guard.
 const HISTORY_LIMIT = 60;
 const HISTORY_COALESCE_MS = 700;
+let HISTORY_NOTE_ID = null;
 let UNDO_STACK = [];
 let REDO_STACK = [];
 let BASELINE = null;
 let historyTimer = null;
+let APPLYING_HISTORY = false;
 
-function serialize() { return JSON.stringify(DATA); }
+function serializeNote() {
+  if (!HISTORY_NOTE_ID) return null;
+  const n = getNote(HISTORY_NOTE_ID);
+  return n ? JSON.stringify(n) : null;
+}
 
-// Sync is not an edit, and must never be undoable. Anything that replaces DATA
-// from the server re-baselines and drops the stacks: the entries describe a
-// dataset that no longer exists, and undoing across a sync would resurrect a
-// pre-sync state — including, on a launch with an empty or stale local cache,
-// the empty dataset that DATA starts out as. That is exactly how undo wiped
-// every note and label: BASELINE was captured at init BEFORE the first pull,
-// so the oldest undo entry was "nothing at all".
+// Called when the editor opens or closes, and whenever a sync replaces DATA
+// underneath us — in that case the entries describe a version of the note the
+// server has since moved past.
 function resetHistory() {
   UNDO_STACK = [];
   REDO_STACK = [];
   clearTimeout(historyTimer); historyTimer = null;
-  BASELINE = serialize();
+  HISTORY_NOTE_ID = editingId || null;
+  BASELINE = serializeNote();
   updateHistoryButtons();
 }
 
 function commitHistory() {
   clearTimeout(historyTimer); historyTimer = null;
-  const now = serialize();
+  const now = serializeNote();
+  if (now === null) return;
   if (BASELINE === null) { BASELINE = now; return; }
-  if (BASELINE === now) return;
+  if (BASELINE === now) return;          // this edit was to some other note
   UNDO_STACK.push(BASELINE);
   if (UNDO_STACK.length > HISTORY_LIMIT) UNDO_STACK.shift();
-  REDO_STACK = [];          // a fresh edit invalidates anything redoable
+  REDO_STACK = [];                        // a fresh edit invalidates redo
   BASELINE = now;
   updateHistoryButtons();
 }
 
+// Debounced, so a burst of typing collapses into one step rather than one per
+// character.
 function scheduleHistory() {
+  if (!HISTORY_NOTE_ID) return;
   clearTimeout(historyTimer);
   historyTimer = setTimeout(commitHistory, HISTORY_COALESCE_MS);
   updateHistoryButtons();
 }
 
-// Applying a snapshot must not itself become a new history entry, hence the
-// suppression flag around the save.
-let APPLYING_HISTORY = false;
-async function applySnapshot(json) {
+async function applyNoteSnapshot(json) {
+  const snap = JSON.parse(json);
+  const idx = DATA.notes.findIndex((n) => n.id === snap.id);
+  if (idx === -1) { resetHistory(); return; }   // note went away; nothing to restore into
   APPLYING_HISTORY = true;
-  DATA = JSON.parse(json);
-  BASELINE = json;
-  renderSidebarLabels();
+  DATA.notes[idx] = snap;
+  BASELINE = JSON.stringify(snap);
   render();
   refreshEditorFromData();
   updateHistoryButtons();
@@ -279,46 +286,22 @@ async function applySnapshot(json) {
   APPLYING_HISTORY = false;
 }
 
-// No single user action empties the entire dataset — notes and labels are only
-// ever removed one at a time — so a snapshot that would wipe everything we
-// currently hold cannot be a state the user was ever in. Refuse it rather than
-// hand it to applySnapshot, which would also push it straight to Nextcloud.
-// (Undoing the deletion of your only note is unaffected: that restores notes,
-// it does not remove them.)
-function wouldWipeEverything(json) {
-  const has = (DATA.notes || []).length + (DATA.labels || []).length;
-  if (!has) return false;
-  try {
-    const next = JSON.parse(json);
-    return (next.notes || []).length === 0 && (next.labels || []).length === 0;
-  } catch (e) { return true; }
-}
-
 function undo() {
   commitHistory();                 // fold in anything still being typed
   if (!UNDO_STACK.length) return;
-  const snap = UNDO_STACK.pop();
-  if (wouldWipeEverything(snap)) {
-    console.warn('[nk] refusing an undo step that would empty everything');
-    resetHistory();
-    showToast('Undo history was out of date and has been cleared.');
-    return;
-  }
-  REDO_STACK.push(serialize());
-  applySnapshot(snap);
+  const current = serializeNote();
+  if (current === null) { resetHistory(); return; }
+  REDO_STACK.push(current);
+  applyNoteSnapshot(UNDO_STACK.pop());
 }
 
 function redo() {
   commitHistory();
   if (!REDO_STACK.length) return;
-  const snap = REDO_STACK.pop();
-  if (wouldWipeEverything(snap)) {
-    console.warn('[nk] refusing a redo step that would empty everything');
-    resetHistory();
-    return;
-  }
-  UNDO_STACK.push(serialize());
-  applySnapshot(snap);
+  const current = serializeNote();
+  if (current === null) { resetHistory(); return; }
+  UNDO_STACK.push(current);
+  applyNoteSnapshot(REDO_STACK.pop());
 }
 
 function updateHistoryButtons() {
@@ -1039,6 +1022,7 @@ function openEditor(id) {
     editorBody.value = n.body || '';
   }
   renderEditorLabels(n);
+  resetHistory();   // a fresh undo session, scoped to this note
   editorOverlay.classList.remove('hidden');
   lockBackgroundScroll(true);
   editor.scrollTop = 0;   // always begin at the note's title
@@ -1142,6 +1126,7 @@ function closeEditor() {
   editorOverlay.classList.add('hidden');
   lockBackgroundScroll(false);
   editingId = null;
+  resetHistory();
   render();
 }
 document.getElementById('editorCloseBtn').addEventListener('click', closeEditor);
@@ -1540,7 +1525,6 @@ async function init() {
     console.warn('Local cache read failed, starting fresh from Nextcloud:', e);
   }
   purgeOldTrash();
-  BASELINE = serialize();   // first edit undoes back to what we launched with
   render();
 
   // Cosmetic wiring — isolated so it can never take anything else down.
