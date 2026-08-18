@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-08-16.3';
+const BUILD_ID = '2026-08-16.4';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -208,7 +208,82 @@ function mergeData(local, remote) {
 }
 
 /* ================= Persistence ================= */
+/* ================= Undo / redo ================= */
+// Snapshots of the whole dataset rather than a log of operations: every
+// mutation already funnels through saveLocal(), so one hook covers editing
+// text, ticking boxes, colours, labels, pin, archive and delete without each
+// having to describe how to reverse itself.
+//
+// BASELINE is the state as of the last entry pushed. Pushing is debounced so a
+// burst of keystrokes collapses into a single undo step instead of one per
+// character — undoing a sentence letter by letter would be useless.
+const HISTORY_LIMIT = 60;
+const HISTORY_COALESCE_MS = 700;
+let UNDO_STACK = [];
+let REDO_STACK = [];
+let BASELINE = null;
+let historyTimer = null;
+
+function serialize() { return JSON.stringify(DATA); }
+
+function commitHistory() {
+  clearTimeout(historyTimer); historyTimer = null;
+  const now = serialize();
+  if (BASELINE === null) { BASELINE = now; return; }
+  if (BASELINE === now) return;
+  UNDO_STACK.push(BASELINE);
+  if (UNDO_STACK.length > HISTORY_LIMIT) UNDO_STACK.shift();
+  REDO_STACK = [];          // a fresh edit invalidates anything redoable
+  BASELINE = now;
+  updateHistoryButtons();
+}
+
+function scheduleHistory() {
+  clearTimeout(historyTimer);
+  historyTimer = setTimeout(commitHistory, HISTORY_COALESCE_MS);
+  updateHistoryButtons();
+}
+
+// Applying a snapshot must not itself become a new history entry, hence the
+// suppression flag around the save.
+let APPLYING_HISTORY = false;
+async function applySnapshot(json) {
+  APPLYING_HISTORY = true;
+  DATA = JSON.parse(json);
+  BASELINE = json;
+  renderSidebarLabels();
+  render();
+  refreshEditorFromData();
+  updateHistoryButtons();
+  await setDirty(true);
+  try { await NKDB.set('data', DATA); } catch (e) { console.warn('Local cache write failed:', e); }
+  pushToServer();
+  APPLYING_HISTORY = false;
+}
+
+function undo() {
+  commitHistory();                 // fold in anything still being typed
+  if (!UNDO_STACK.length) return;
+  REDO_STACK.push(serialize());
+  applySnapshot(UNDO_STACK.pop());
+}
+
+function redo() {
+  commitHistory();
+  if (!REDO_STACK.length) return;
+  UNDO_STACK.push(serialize());
+  applySnapshot(REDO_STACK.pop());
+}
+
+function updateHistoryButtons() {
+  const u = document.getElementById('editorUndoBtn');
+  const r = document.getElementById('editorRedoBtn');
+  if (u) u.disabled = UNDO_STACK.length === 0;
+  if (r) r.disabled = REDO_STACK.length === 0;
+}
+
 async function saveLocal() {
+  if (!APPLYING_HISTORY) scheduleHistory();
   await setDirty(true);
   try { await NKDB.set('data', DATA); } catch (e) { console.warn('Local cache write failed:', e); }
   pushToServer();
@@ -843,6 +918,38 @@ function autoGrowRow(el) {
   if (el.scrollHeight > 0) el.style.height = el.scrollHeight + 'px';
 }
 
+// After undo/redo the open note may have changed underneath us — or vanished,
+// if the step being undone was its creation. Update the fields in place rather
+// than reopening, so the reader does not lose their scroll position.
+function refreshEditorFromData() {
+  if (!editingId) return;
+  const n = getNote(editingId);
+  if (!n || n.trashed) {
+    editorOverlay.classList.add('hidden');
+    lockBackgroundScroll(false);
+    editingId = null;
+    return;
+  }
+  editorTitle.value = n.title || '';
+  editor.style.background = n.color && n.color !== 'default' ? `var(--c-${n.color})` : 'var(--surface)';
+  editorPinBtn.classList.toggle('on', !!n.pinned);
+  editorArchiveBtn.classList.toggle('on', !!n.archived);
+  if (n.type === 'checklist') {
+    editorBody.classList.add('hidden');
+    editorChecklist.classList.remove('hidden');
+    addChecklistItemBtn.classList.remove('hidden');
+    renderEditorChecklist(n);
+    editorChecklist.querySelectorAll('textarea').forEach(autoGrowRow);
+  } else {
+    editorBody.classList.remove('hidden');
+    editorChecklist.classList.add('hidden');
+    addChecklistItemBtn.classList.add('hidden');
+    editorBody.value = n.body || '';
+    autoGrowEditorBody();
+  }
+  renderEditorLabels(n);
+}
+
 function autoGrowEditorBody() {
   editorBody.style.height = 'auto';
   editorBody.style.height = editorBody.scrollHeight + 'px';
@@ -993,6 +1100,18 @@ function closeEditor() {
 }
 document.getElementById('editorCloseBtn').addEventListener('click', closeEditor);
 editorScrim.addEventListener('click', closeEditor);
+
+document.getElementById('editorUndoBtn').addEventListener('click', undo);
+document.getElementById('editorRedoBtn').addEventListener('click', redo);
+// The usual keyboard shortcuts, ignored while typing in a field so they do not
+// fight the browser's own per-field undo.
+document.addEventListener('keydown', (e) => {
+  if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+  e.preventDefault();
+  if (e.shiftKey) redo(); else undo();
+});
 
 editorPinBtn.addEventListener('click', () => { togglePin(editingId); editorPinBtn.classList.toggle('on'); });
 editorArchiveBtn.addEventListener('click', () => { archiveNote(editingId); closeEditor(); });
@@ -1375,6 +1494,7 @@ async function init() {
     console.warn('Local cache read failed, starting fresh from Nextcloud:', e);
   }
   purgeOldTrash();
+  BASELINE = serialize();   // first edit undoes back to what we launched with
   render();
 
   // Cosmetic wiring — isolated so it can never take anything else down.

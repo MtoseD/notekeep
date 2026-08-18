@@ -13,7 +13,7 @@
      stylesheet and script from different deploys — a mismatch has three
      times now presented as a mystery bug (unstyled controls, a light
      theme, "everything is broken") rather than as what it is. */
-  --build:"2026-08-16.3";
+  --build:"2026-08-16.4";
   --bg:#F2EFE9;
   --surface:#FFFFFF;
   --surface-2:#EDEAE3;
@@ -80,6 +80,12 @@ body{
   overscroll-behavior-y:none;
 }
 svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+
+/* ---------- Motion ----------
+   Short and ease-out, the way Keep does it: long enough to read as movement,
+   short enough never to be something you wait for. Everything here is opt-out
+   under prefers-reduced-motion at the end of this file. */
+:root{ --ease:cubic-bezier(.2,.8,.2,1); --fast:.14s; --med:.2s; }
 button{ font-family:inherit; }
 .hidden{ display:none !important; }
 
@@ -100,7 +106,10 @@ body{ overflow-x:hidden; }
   background:transparent; border:none; color:var(--text); cursor:pointer;
   flex:none;
 }
+.icon-btn{ transition:background-color var(--fast) var(--ease), color var(--fast) var(--ease), opacity var(--fast) var(--ease); }
 .icon-btn:hover{ background:var(--surface-2); }
+.icon-btn:disabled{ opacity:.3; cursor:default; }
+.icon-btn:disabled:hover{ background:transparent; }
 .icon-btn.small{ width:32px; height:32px; }
 .icon-btn.tiny{ width:26px; height:26px; }
 .icon-btn.tiny svg{ width:15px; height:15px; }
@@ -147,6 +156,7 @@ body{ overflow-x:hidden; }
   background:transparent; border:none; color:var(--text); cursor:pointer;
   font-size:14.5px; text-align:left;
 }
+.nav-item{ transition:background-color var(--fast) var(--ease); }
 .nav-item:hover{ background:var(--surface-2); }
 .nav-item.active{ background:var(--c-sand); color:#2B2A28; font-weight:600; }
 html[data-theme="dark"] .nav-item.active{ background:var(--surface-2); color:var(--accent-2); }
@@ -253,9 +263,10 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
   display:flex; flex-direction:column;
   overflow:hidden;
   min-height:60px;
-  transition:box-shadow .15s ease;
+  transition:box-shadow var(--med) var(--ease), background-color var(--med) var(--ease), transform var(--fast) var(--ease);
 }
 .note-card:hover{ box-shadow:var(--shadow-lift); }
+.note-card:active{ transform:scale(.995); }
 .note-card.sortable-ghost{ opacity:.35; }
 .note-card.sortable-drag{ box-shadow:var(--shadow-lift); cursor:grabbing; }
 
@@ -351,8 +362,18 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
   display:flex; align-items:flex-start; justify-content:center;
   overflow:hidden;
 }
+/* Toggling display restarts these, so the note animates in every time it is
+   opened without any JS bookkeeping. */
+.overlay:not(.hidden){ animation:overlay-in var(--med) var(--ease); }
+.overlay:not(.hidden) .editor{ animation:editor-in var(--med) var(--ease); }
+@keyframes overlay-in{ from{ opacity:0 } to{ opacity:1 } }
+@keyframes editor-in{
+  from{ opacity:0; transform:translateY(10px) scale(.985) }
+  to{ opacity:1; transform:none }
+}
 .editor-scrim{ position:fixed; inset:0; background:rgba(20,18,14,.5); }
 .editor{
+  transition:background-color var(--med) var(--ease);
   position:relative; z-index:1; margin:2.5vh 0;
   width:min(600px, 94vw); max-height:calc(100% - 5vh);
   overflow-y:auto; overscroll-behavior:contain;
@@ -424,6 +445,11 @@ html.editor-open, body.editor-open{ overflow:hidden; }
 .icon-btn.on{ color:var(--accent); background:var(--surface-2); }
 
 /* ---------- Popovers ---------- */
+.popover:not(.hidden){ animation:pop-in var(--fast) var(--ease); }
+@keyframes pop-in{
+  from{ opacity:0; transform:translateY(-4px) scale(.97) }
+  to{ opacity:1; transform:none }
+}
 .popover{
   position:fixed; z-index:200; background:var(--surface); border-radius:10px;
   box-shadow:var(--shadow-lift); border:1px solid var(--border); padding:8px; min-width:180px;
@@ -508,4 +534,14 @@ html[data-theme="dark"] .toast{ background:var(--surface-2); color:var(--text); 
   .editor-checklist-row textarea,
   .label-popover-create input{ font-size:16px; }
   .editor-title{ font-size:19px; }   /* already above the threshold; keep it big */
+}
+
+/* Anyone who has asked their system for less motion gets none of it. */
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration:.001ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+    scroll-behavior:auto !important;
+  }
 }
