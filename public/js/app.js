@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-08-16.4';
+const BUILD_ID = '2026-08-16.5';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -130,12 +130,14 @@ async function pullFromServer(showToastOnFail) {
       if (!DIRTY && !localNewer) {
         DATA = j.data && j.data.notes ? j.data : DATA;
         SERVER_VERSION = j.version;
+        resetHistory();
         render();
         cacheLocally(DATA, SERVER_VERSION);
       } else {
         // We have unsynced local edits; merge instead of clobbering.
         DATA = mergeData(DATA, j.data);
         SERVER_VERSION = j.version;
+        resetHistory();
         render();
         cacheLocally(DATA, SERVER_VERSION);
         pushToServer();
@@ -176,6 +178,7 @@ const pushToServer = debounce(async () => {
       const j = await res.json();
       DATA = mergeData(DATA, j.remote);
       SERVER_VERSION = j.version;
+      resetHistory();
       render();
       cacheLocally(DATA, SERVER_VERSION);
       return pushToServer();
@@ -226,6 +229,21 @@ let historyTimer = null;
 
 function serialize() { return JSON.stringify(DATA); }
 
+// Sync is not an edit, and must never be undoable. Anything that replaces DATA
+// from the server re-baselines and drops the stacks: the entries describe a
+// dataset that no longer exists, and undoing across a sync would resurrect a
+// pre-sync state — including, on a launch with an empty or stale local cache,
+// the empty dataset that DATA starts out as. That is exactly how undo wiped
+// every note and label: BASELINE was captured at init BEFORE the first pull,
+// so the oldest undo entry was "nothing at all".
+function resetHistory() {
+  UNDO_STACK = [];
+  REDO_STACK = [];
+  clearTimeout(historyTimer); historyTimer = null;
+  BASELINE = serialize();
+  updateHistoryButtons();
+}
+
 function commitHistory() {
   clearTimeout(historyTimer); historyTimer = null;
   const now = serialize();
@@ -261,18 +279,46 @@ async function applySnapshot(json) {
   APPLYING_HISTORY = false;
 }
 
+// No single user action empties the entire dataset — notes and labels are only
+// ever removed one at a time — so a snapshot that would wipe everything we
+// currently hold cannot be a state the user was ever in. Refuse it rather than
+// hand it to applySnapshot, which would also push it straight to Nextcloud.
+// (Undoing the deletion of your only note is unaffected: that restores notes,
+// it does not remove them.)
+function wouldWipeEverything(json) {
+  const has = (DATA.notes || []).length + (DATA.labels || []).length;
+  if (!has) return false;
+  try {
+    const next = JSON.parse(json);
+    return (next.notes || []).length === 0 && (next.labels || []).length === 0;
+  } catch (e) { return true; }
+}
+
 function undo() {
   commitHistory();                 // fold in anything still being typed
   if (!UNDO_STACK.length) return;
+  const snap = UNDO_STACK.pop();
+  if (wouldWipeEverything(snap)) {
+    console.warn('[nk] refusing an undo step that would empty everything');
+    resetHistory();
+    showToast('Undo history was out of date and has been cleared.');
+    return;
+  }
   REDO_STACK.push(serialize());
-  applySnapshot(UNDO_STACK.pop());
+  applySnapshot(snap);
 }
 
 function redo() {
   commitHistory();
   if (!REDO_STACK.length) return;
+  const snap = REDO_STACK.pop();
+  if (wouldWipeEverything(snap)) {
+    console.warn('[nk] refusing a redo step that would empty everything');
+    resetHistory();
+    return;
+  }
   UNDO_STACK.push(serialize());
-  applySnapshot(REDO_STACK.pop());
+  applySnapshot(snap);
 }
 
 function updateHistoryButtons() {
