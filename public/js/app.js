@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-08-17.1';
+const BUILD_ID = '2026-08-17.2';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -560,13 +560,18 @@ function renderNoteCard(n, ctx) {
 
   if (n.type === 'checklist') {
     const items = n.items || [];
-    // Render enough items to actually fill the taller preview cap; the CSS
-    // max-height still does the real clipping, this just bounds the DOM work.
-    const shown = items.slice(0, PREVIEW_CHECKLIST_ITEMS);
+    // Like Keep: the card lists what is still to do, and reduces the ticked
+    // ones to a count. A card that keeps showing everything you have already
+    // finished tells you nothing at a glance.
+    const open = items.filter((i) => !i.checked);
+    const done = items.filter((i) => i.checked);
+    // The CSS max-height still does the real clipping; this just bounds DOM work.
+    const shown = open.slice(0, PREVIEW_CHECKLIST_ITEMS);
     inner += '<ul class="note-checklist">' + shown.map((i) => `
-      <li class="${i.checked ? 'checked' : ''}"><span class="chk"></span><span>${escapeHtml(i.text)}</span></li>
+      <li><span class="chk"></span><span>${escapeHtml(i.text)}</span></li>
     `).join('') + '</ul>';
-    if (items.length > shown.length) inner += `<div class="note-checklist-more">+ ${items.length - shown.length} more</div>`;
+    if (open.length > shown.length) inner += `<div class="note-checklist-more">+ ${open.length - shown.length} more</div>`;
+    if (done.length) inner += `<div class="note-checklist-more">+ ${done.length} ticked</div>`;
   } else if (n.body) {
     inner += `<div class="note-body">${escapeHtml(n.body)}</div>`;
   }
@@ -1022,6 +1027,7 @@ function openEditor(id) {
     editorBody.value = n.body || '';
   }
   renderEditorLabels(n);
+  doneCollapsed = true;   // ticked section starts collapsed, as Keep does
   resetHistory();   // a fresh undo session, scoped to this note
   editorOverlay.classList.remove('hidden');
   lockBackgroundScroll(true);
@@ -1034,9 +1040,22 @@ function openEditor(id) {
   setTimeout(() => (n.title ? editorBody.focus() : editorTitle.focus()), 30);
 }
 
+// Ticked items drop out of the list into a collapsed "N ticked items" section
+// at the bottom, the way Keep does it. Ticking something should get it out of
+// your way; leaving it in place, merely struck through, means a list you have
+// worked through stays as long and as noisy as when you started.
+//
+// The grouping is presentational only — note.items keeps its own order, so
+// unticking an item returns it to where it was rather than to the end.
+let doneCollapsed = true;
+
 function renderEditorChecklist(n) {
   editorChecklist.innerHTML = '';
-  (n.items || []).forEach((item) => {
+  const items = n.items || [];
+  const open = items.filter((i) => !i.checked);
+  const done = items.filter((i) => i.checked);
+
+  const makeRow = (item) => {
     const row = document.createElement('div');
     row.className = 'editor-checklist-row' + (item.checked ? ' checked' : '');
     row.dataset.id = item.id;
@@ -1075,17 +1094,42 @@ function renderEditorChecklist(n) {
     });
     editorChecklist.appendChild(row);
     autoGrowRow(input);   // now attached, so scrollHeight is meaningful
-  });
+  };
+
+  open.forEach(makeRow);
+
+  if (done.length) {
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'checklist-done-header' + (doneCollapsed ? '' : ' open');
+    header.innerHTML =
+      '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>' +
+      '<span>' + done.length + (done.length === 1 ? ' ticked item' : ' ticked items') + '</span>';
+    header.addEventListener('click', () => { doneCollapsed = !doneCollapsed; renderEditorChecklist(n); });
+    editorChecklist.appendChild(header);
+    if (!doneCollapsed) done.forEach(makeRow);
+  }
+
   if (checklistSortable) checklistSortable.destroy();
   checklistSortable = new Sortable(editorChecklist, {
     handle: '.row-drag', animation: 150,
     onEnd: () => {
-      const ids = Array.from(editorChecklist.children).map((el) => el.dataset.id);
-      n.items.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+      // Only rows carry a data-id; the section header does not, and ticked rows
+      // are absent entirely while collapsed. Order by what is on screen and let
+      // a stable sort keep everything else where it was.
+      const ids = Array.from(editorChecklist.children)
+        .map((el) => el.dataset.id).filter(Boolean);
+      const pos = new Map(ids.map((id, i) => [id, i]));
+      n.items.sort((a, b) => {
+        const pa = pos.has(a.id) ? pos.get(a.id) : Infinity;
+        const pb = pos.has(b.id) ? pos.get(b.id) : Infinity;
+        return pa - pb;
+      });
       touch(n); saveLocal();
     },
   });
 }
+
 addChecklistItemBtn.addEventListener('click', () => {
   const n = getNote(editingId);
   if (!n) return;

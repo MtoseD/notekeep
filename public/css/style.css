@@ -13,7 +13,7 @@
      stylesheet and script from different deploys — a mismatch has three
      times now presented as a mystery bug (unstyled controls, a light
      theme, "everything is broken") rather than as what it is. */
-  --build:"2026-08-17.1";
+  --build:"2026-08-17.2";
   --bg:#F2EFE9;
   --surface:#FFFFFF;
   --surface-2:#EDEAE3;
@@ -451,6 +451,22 @@ html.editor-open, body.editor-open{ overflow:hidden; }
 .editor-checklist-row .row-remove{ opacity:0; width:26px; height:26px; border-radius:50%; border:none; background:transparent; color:var(--text-dim); cursor:pointer; flex:none; display:flex; align-items:center; justify-content:center; }
 .editor-checklist-row:hover .row-remove{ opacity:1; }
 .editor-checklist-row .row-remove svg{ width:14px; height:14px; }
+/* Divider between what is left to do and what is done. Chevron points right
+   when collapsed and down when open, the way a disclosure control should. */
+.checklist-done-header{
+  display:flex; align-items:center; gap:8px;
+  margin:10px 0 2px; padding:6px 0;
+  background:transparent; border:none; border-top:1px solid var(--border);
+  color:var(--text-dim); font-size:13px; text-align:left; cursor:pointer;
+  transition:color var(--fast) var(--ease);
+}
+.checklist-done-header:hover{ color:var(--text); }
+.checklist-done-header svg{
+  width:15px; height:15px; flex:none;
+  transition:transform var(--fast) var(--ease);
+}
+.checklist-done-header.open svg{ transform:rotate(90deg); }
+
 .add-item-btn{ align-self:flex-start; margin:6px 0 2px -8px; color:var(--text-dim); }
 
 .editor-labels{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
