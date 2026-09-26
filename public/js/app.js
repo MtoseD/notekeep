@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-08-17.2';
+const BUILD_ID = '2026-09-26.1';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -876,7 +876,7 @@ function renderComposerChecklist() {
         }, 0);
       }
     });
-    row.querySelector('.chk-toggle').addEventListener('click', () => { item.checked = !item.checked; renderComposerChecklist(); });
+    bindTick(row.querySelector('.chk-toggle'), () => { item.checked = !item.checked; renderComposerChecklist(); });
     composerChecklist.appendChild(row);
     autoGrowRow(input);   // now attached, so scrollHeight is meaningful
   });
@@ -1049,6 +1049,29 @@ function openEditor(id) {
 // unticking an item returns it to where it was rather than to the end.
 let doneCollapsed = true;
 
+// Ticking is bound to pointerdown, not click, and the two are guarded against
+// each other. Two separate things made a tap "not take":
+//   - click arrives only after focus has moved. With the keyboard up from
+//     typing in an item, iOS spends the first tap dismissing it and the button
+//     never sees a click at all — hence having to tap twice.
+//   - preventDefault stops that focus shift, so the row you were editing does
+//     not blur out from under the gesture.
+// A click still fires afterwards on browsers without pointer events, and the
+// timestamp guard stops that counting as a second tick — the row is rebuilt
+// between the two, so a stray click would otherwise land on its replacement.
+let lastTickAt = 0;
+function bindTick(btn, fn) {
+  const run = (e) => {
+    if (e.cancelable) e.preventDefault();
+    const now = Date.now();
+    if (now - lastTickAt < 350) return;
+    lastTickAt = now;
+    fn();
+  };
+  btn.addEventListener('pointerdown', run);
+  btn.addEventListener('click', run);
+}
+
 function renderEditorChecklist(n) {
   editorChecklist.innerHTML = '';
   const items = n.items || [];
@@ -1065,7 +1088,7 @@ function renderEditorChecklist(n) {
       <textarea rows="1" placeholder="List item">${escapeHtml(item.text)}</textarea>
       <button class="row-remove"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     `;
-    row.querySelector('.chk-toggle').addEventListener('click', () => {
+    bindTick(row.querySelector('.chk-toggle'), () => {
       toggleChecklistItem(n, item.id); touch(n); saveLocal(); renderEditorChecklist(n); render();
     });
     const input = row.querySelector('textarea');
