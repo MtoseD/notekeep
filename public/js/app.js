@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-10-04.1';
+const BUILD_ID = '2026-10-04.3';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -856,6 +856,7 @@ function renderComposerChecklist() {
     row.dataset.id = item.id;   // focusChecklistRow finds the new row by this
     row.innerHTML = `<button class="chk-toggle" data-idx="${idx}"></button><textarea rows="1" placeholder="List item">${escapeHtml(item.text)}</textarea>`;
     const input = row.querySelector('textarea');
+    focusOnPress(input);
     input.addEventListener('input', () => { item.text = input.value; autoGrowRow(input); });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -1082,6 +1083,19 @@ function bindTap(btn, fn) {
 // however short, breaks iOS's association between the tap and the focus() call,
 // and the keyboard then refuses to open — so the field is focused but you still
 // have to tap it to type into it.
+// Focus on pointerdown rather than waiting for the click. A click arrives only
+// after the press is released and after focus has settled, and several ordinary
+// things on a phone consume that first tap instead: dismissing the keyboard,
+// halting a scroll that still has momentum, a library's own touch handling.
+// Whatever it is, the press itself is ours — so take focus there and the first
+// tap always lands. Nothing is prevented, so iOS still places the caret where
+// the finger went.
+function focusOnPress(el) {
+  el.addEventListener('pointerdown', () => {
+    if (document.activeElement !== el) el.focus();
+  });
+}
+
 function focusChecklistRow(container, id) {
   const el = container.querySelector(`[data-id="${id}"] textarea`);
   if (el) { el.focus(); autoGrowRow(el); }
@@ -1107,6 +1121,7 @@ function renderEditorChecklist(n) {
       toggleChecklistItem(n, item.id); touch(n); saveLocal(); renderEditorChecklist(n); render();
     });
     const input = row.querySelector('textarea');
+    focusOnPress(input);
     input.addEventListener('input', () => {
       item.text = input.value; autoGrowRow(input); touch(n); saveLocal();
     });
@@ -1147,7 +1162,17 @@ function renderEditorChecklist(n) {
 
   if (checklistSortable) checklistSortable.destroy();
   checklistSortable = new Sortable(editorChecklist, {
-    handle: '.row-drag', animation: 150,
+    handle: '.row-drag',
+    // Belt and braces, not the fix for anything observed: Sortable only calls
+    // preventDefault on a filtered element, and with filter unset it never
+    // reached that path. Naming the interactive elements and turning
+    // preventOnFilter off means it cannot start doing so.
+    filter: 'textarea, button',
+    preventOnFilter: false,
+    // Without this, draggable defaults to every child, which made the
+    // "N ticked items" header draggable as though it were a row.
+    draggable: '.editor-checklist-row',
+    animation: 150,
     onEnd: () => {
       // Only rows carry a data-id; the section header does not, and ticked rows
       // are absent entirely while collapsed. Order by what is on screen and let
