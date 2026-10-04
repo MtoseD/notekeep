@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-09-26.1';
+const BUILD_ID = '2026-10-04.1';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -853,6 +853,7 @@ function renderComposerChecklist() {
   draft.items.forEach((item, idx) => {
     const row = document.createElement('div');
     row.className = 'editor-checklist-row' + (item.checked ? ' checked' : '');
+    row.dataset.id = item.id;   // focusChecklistRow finds the new row by this
     row.innerHTML = `<button class="chk-toggle" data-idx="${idx}"></button><textarea rows="1" placeholder="List item">${escapeHtml(item.text)}</textarea>`;
     const input = row.querySelector('textarea');
     input.addEventListener('input', () => { item.text = input.value; autoGrowRow(input); });
@@ -876,14 +877,19 @@ function renderComposerChecklist() {
         }, 0);
       }
     });
-    bindTick(row.querySelector('.chk-toggle'), () => { item.checked = !item.checked; renderComposerChecklist(); });
+    bindTap(row.querySelector('.chk-toggle'), () => { item.checked = !item.checked; renderComposerChecklist(); });
     composerChecklist.appendChild(row);
     autoGrowRow(input);   // now attached, so scrollHeight is meaningful
   });
   const addBtn = document.createElement('button');
   addBtn.className = 'text-btn add-item-btn';
   addBtn.textContent = '+ Add item';
-  addBtn.addEventListener('click', () => { draft.items.push({ id: uid(), text: '', checked: false }); renderComposerChecklist(); });
+  bindTap(addBtn, () => {
+    const item = { id: uid(), text: '', checked: false };
+    draft.items.push(item);
+    renderComposerChecklist();
+    focusChecklistRow(composerChecklist, item.id);
+  });
   composerChecklist.appendChild(addBtn);
 }
 
@@ -1059,17 +1065,26 @@ let doneCollapsed = true;
 // A click still fires afterwards on browsers without pointer events, and the
 // timestamp guard stops that counting as a second tick — the row is rebuilt
 // between the two, so a stray click would otherwise land on its replacement.
-let lastTickAt = 0;
-function bindTick(btn, fn) {
+let lastTapAt = 0;
+function bindTap(btn, fn) {
   const run = (e) => {
     if (e.cancelable) e.preventDefault();
     const now = Date.now();
-    if (now - lastTickAt < 350) return;
-    lastTickAt = now;
+    if (now - lastTapAt < 350) return;
+    lastTapAt = now;
     fn();
   };
   btn.addEventListener('pointerdown', run);
   btn.addEventListener('click', run);
+}
+
+// Focus must happen inside the gesture that asked for the row. A setTimeout,
+// however short, breaks iOS's association between the tap and the focus() call,
+// and the keyboard then refuses to open — so the field is focused but you still
+// have to tap it to type into it.
+function focusChecklistRow(container, id) {
+  const el = container.querySelector(`[data-id="${id}"] textarea`);
+  if (el) { el.focus(); autoGrowRow(el); }
 }
 
 function renderEditorChecklist(n) {
@@ -1088,7 +1103,7 @@ function renderEditorChecklist(n) {
       <textarea rows="1" placeholder="List item">${escapeHtml(item.text)}</textarea>
       <button class="row-remove"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     `;
-    bindTick(row.querySelector('.chk-toggle'), () => {
+    bindTap(row.querySelector('.chk-toggle'), () => {
       toggleChecklistItem(n, item.id); touch(n); saveLocal(); renderEditorChecklist(n); render();
     });
     const input = row.querySelector('textarea');
@@ -1102,10 +1117,7 @@ function renderEditorChecklist(n) {
         const newItem = { id: uid(), text: '', checked: false };
         n.items.splice(idx + 1, 0, newItem);
         touch(n); saveLocal(); renderEditorChecklist(n); render();
-        setTimeout(() => {
-          const row2 = editorChecklist.querySelector(`[data-id="${newItem.id}"] textarea`);
-          if (row2) row2.focus();
-        }, 0);
+        focusChecklistRow(editorChecklist, newItem.id);
       } else if (e.key === 'Backspace' && input.value === '') {
         e.preventDefault();
         removeChecklistItem(n, item.id);
@@ -1153,15 +1165,14 @@ function renderEditorChecklist(n) {
   });
 }
 
-addChecklistItemBtn.addEventListener('click', () => {
+bindTap(addChecklistItemBtn, () => {
   const n = getNote(editingId);
   if (!n) return;
-  addChecklistItem(n, '');
+  // This looked for 'input', but these rows became textareas — so it matched
+  // nothing, focused nothing, and adding an item left you to tap it yourself.
+  const item = addChecklistItem(n, '');
   touch(n); saveLocal(); renderEditorChecklist(n);
-  setTimeout(() => {
-    const inputs = editorChecklist.querySelectorAll('input');
-    if (inputs.length) inputs[inputs.length - 1].focus();
-  }, 0);
+  focusChecklistRow(editorChecklist, item.id);
 });
 
 function renderEditorLabels(n) {
