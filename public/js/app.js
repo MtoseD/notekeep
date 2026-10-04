@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-10-04.3';
+const BUILD_ID = '2026-10-04.4';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -482,6 +482,26 @@ const notesGrid = document.getElementById('notesGrid');
 const pinnedHeading = document.getElementById('pinnedHeading');
 const othersHeading = document.getElementById('othersHeading');
 const viewHeading = document.getElementById('viewHeading');
+
+// "Empty trash", sitting beside the Trash heading. Built here rather than in
+// index.html to keep this to app.js and style.css.
+const emptyTrashBtn = document.createElement('button');
+emptyTrashBtn.type = 'button';
+emptyTrashBtn.className = 'text-btn empty-trash-btn hidden';
+emptyTrashBtn.textContent = 'Empty trash';
+viewHeading.insertAdjacentElement('afterend', emptyTrashBtn);
+emptyTrashBtn.addEventListener('click', () => {
+  const doomed = DATA.notes.filter((n) => n.trashed);
+  if (!doomed.length) return;
+  const msg = doomed.length === 1
+    ? 'Permanently delete 1 note? This cannot be undone.'
+    : `Permanently delete all ${doomed.length} notes in the trash? This cannot be undone.`;
+  if (!window.confirm(msg)) return;
+  DATA.notes = DATA.notes.filter((n) => !n.trashed);
+  saveLocal();
+  render();
+  showToast(doomed.length === 1 ? 'Note deleted' : doomed.length + ' notes deleted');
+});
 const emptyState = document.getElementById('emptyState');
 const emptyStateText = document.getElementById('emptyStateText');
 
@@ -514,6 +534,11 @@ function render() {
     else if (VIEW.type === 'trash') { viewHeading.textContent = 'Trash'; viewHeading.style.display = 'block'; }
     else if (VIEW.type === 'label') { viewHeading.textContent = label || 'Label'; viewHeading.style.display = 'block'; }
   }
+
+  const trashedCount = DATA.notes.filter((n) => n.trashed).length;
+  const showEmptyTrash = VIEW.type === 'trash' && !SEARCH.trim() && trashedCount > 0;
+  emptyTrashBtn.classList.toggle('hidden', !showEmptyTrash);
+  if (showEmptyTrash) emptyTrashBtn.textContent = `Empty trash (${trashedCount})`;
 
   const showSections = pinned.length > 0 && others.length > 0 && !flat;
   if (showSections) { pinnedHeading.classList.remove('hidden'); othersHeading.classList.remove('hidden'); }
@@ -549,6 +574,10 @@ function renderNoteCard(n, ctx) {
   el.style.setProperty('--card-bg', bg);
 
   const inTrash = VIEW.type === 'trash' && !SEARCH.trim();
+  // Trash cards keep their actions on phones: the footer is hidden there for
+  // ordinary notes (you open the note to act on it), but a trashed note cannot
+  // be opened, so Restore and Delete forever were simply unreachable on mobile.
+  if (inTrash) el.classList.add('in-trash');
 
   let inner = '';
   if (!inTrash) {

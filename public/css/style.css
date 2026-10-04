@@ -13,7 +13,7 @@
      stylesheet and script from different deploys — a mismatch has three
      times now presented as a mystery bug (unstyled controls, a light
      theme, "everything is broken") rather than as what it is. */
-  --build:"2026-10-04.3";
+  --build:"2026-10-04.4";
   --bg:#F2EFE9;
   --surface:#FFFFFF;
   --surface-2:#EDEAE3;
@@ -244,6 +244,13 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
   margin:0 4px 10px; text-transform:uppercase;
 }
 .view-heading{ font-size:20px; text-transform:none; letter-spacing:0; color:var(--text); margin-bottom:20px; }
+/* Sits under the Trash heading. Red because it is the one irreversible action
+   in the app — everything else can be undone or restored. */
+.empty-trash-btn{
+  display:block; margin:-12px 0 20px -8px;
+  color:var(--danger); font-weight:600;
+}
+.empty-trash-btn:hover{ background:var(--surface-2); }
 
 .notes-grid{
   display:grid;
@@ -547,6 +554,10 @@ html[data-theme="dark"] .toast{ background:var(--surface-2); color:var(--text); 
   .main{ padding:16px 12px calc(80px + env(safe-area-inset-bottom)); }
   .notes-grid{ grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; }
   .note-footer{ display:none; }
+  /* ...except in the trash. A trashed note cannot be opened to act on it, so
+     hiding its footer here left Restore and Delete forever with no route at
+     all on a phone — permanent deletion was impossible on mobile. */
+  .note-card.in-trash .note-footer{ display:flex; }
   .note-pin-btn{ opacity:1; }
 }
 @media (max-width:520px){
