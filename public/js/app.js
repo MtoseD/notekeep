@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-10-04.4';
+const BUILD_ID = '2026-10-04.5';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -487,8 +487,7 @@ const viewHeading = document.getElementById('viewHeading');
 // index.html to keep this to app.js and style.css.
 const emptyTrashBtn = document.createElement('button');
 emptyTrashBtn.type = 'button';
-emptyTrashBtn.className = 'text-btn empty-trash-btn hidden';
-emptyTrashBtn.textContent = 'Empty trash';
+emptyTrashBtn.className = 'empty-trash-btn hidden';
 viewHeading.insertAdjacentElement('afterend', emptyTrashBtn);
 emptyTrashBtn.addEventListener('click', () => {
   const doomed = DATA.notes.filter((n) => n.trashed);
@@ -538,7 +537,12 @@ function render() {
   const trashedCount = DATA.notes.filter((n) => n.trashed).length;
   const showEmptyTrash = VIEW.type === 'trash' && !SEARCH.trim() && trashedCount > 0;
   emptyTrashBtn.classList.toggle('hidden', !showEmptyTrash);
-  if (showEmptyTrash) emptyTrashBtn.textContent = `Empty trash (${trashedCount})`;
+  if (showEmptyTrash) {
+    emptyTrashBtn.innerHTML =
+      '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/>' +
+      '<path d="M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13"/></svg>' +
+      '<span>Empty trash</span><span class="empty-trash-count">' + trashedCount + '</span>';
+  }
 
   const showSections = pinned.length > 0 && others.length > 0 && !flat;
   if (showSections) { pinnedHeading.classList.remove('hidden'); othersHeading.classList.remove('hidden'); }
@@ -991,15 +995,23 @@ function autoGrowRow(el) {
 // After undo/redo the open note may have changed underneath us — or vanished,
 // if the step being undone was its creation. Update the fields in place rather
 // than reopening, so the reader does not lose their scroll position.
+// Every way out of the editor goes through here. Hiding the overlay is only a
+// third of the job: the page behind it is scroll-locked while a note is open,
+// and the undo session belongs to the note being left. Deleting a note from
+// its own menu used to hide the overlay directly and skip both — which left
+// the whole app unable to scroll until some other path happened to call
+// closeEditor(), the "open and close a note and it works again" workaround.
+function hideEditor() {
+  editorOverlay.classList.add('hidden');
+  lockBackgroundScroll(false);
+  editingId = null;
+  resetHistory();
+}
+
 function refreshEditorFromData() {
   if (!editingId) return;
   const n = getNote(editingId);
-  if (!n || n.trashed) {
-    editorOverlay.classList.add('hidden');
-    lockBackgroundScroll(false);
-    editingId = null;
-    return;
-  }
+  if (!n || n.trashed) { hideEditor(); return; }
   editorTitle.value = n.title || '';
   editor.style.background = n.color && n.color !== 'default' ? `var(--c-${n.color})` : 'var(--surface)';
   editorPinBtn.classList.toggle('on', !!n.pinned);
@@ -1255,10 +1267,7 @@ function closeEditor() {
   const n = getNote(editingId);
   if (n && n.type === 'text' && !n.title.trim() && !n.body.trim()) deleteForever(n.id);
   else if (n && n.type === 'checklist' && !n.title.trim() && !(n.items || []).some((i) => i.text.trim())) deleteForever(n.id);
-  editorOverlay.classList.add('hidden');
-  lockBackgroundScroll(false);
-  editingId = null;
-  resetHistory();
+  hideEditor();
   render();
 }
 document.getElementById('editorCloseBtn').addEventListener('click', closeEditor);
@@ -1348,7 +1357,7 @@ document.getElementById('moreDeleteBtn').addEventListener('click', () => {
   hideAllPopovers();
   if (!moreTarget) return;
   trashNote(moreTarget);
-  if (editingId === moreTarget) { editorOverlay.classList.add('hidden'); editingId = null; }
+  if (editingId === moreTarget) hideEditor();
 });
 document.getElementById('moreCopyBtn').addEventListener('click', () => {
   hideAllPopovers();

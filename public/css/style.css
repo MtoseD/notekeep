@@ -13,7 +13,7 @@
      stylesheet and script from different deploys — a mismatch has three
      times now presented as a mystery bug (unstyled controls, a light
      theme, "everything is broken") rather than as what it is. */
-  --build:"2026-10-04.4";
+  --build:"2026-10-04.5";
   --bg:#F2EFE9;
   --surface:#FFFFFF;
   --surface-2:#EDEAE3;
@@ -244,13 +244,29 @@ html[data-theme="dark"] .label-item.active{ background:var(--surface-2); color:v
   margin:0 4px 10px; text-transform:uppercase;
 }
 .view-heading{ font-size:20px; text-transform:none; letter-spacing:0; color:var(--text); margin-bottom:20px; }
-/* Sits under the Trash heading. Red because it is the one irreversible action
-   in the app — everything else can be undone or restored. */
+/* Sits under the Trash heading. Outlined rather than filled: it is the one
+   irreversible action in the app, so it should read as deliberate without
+   shouting at you every time you glance at the trash. It fills in only on
+   hover, which is the moment you are about to commit to it. */
 .empty-trash-btn{
-  display:block; margin:-12px 0 20px -8px;
-  color:var(--danger); font-weight:600;
+  display:inline-flex; align-items:center; gap:8px;
+  margin:-10px 0 20px; padding:7px 14px 7px 11px;
+  border:1px solid var(--border); border-radius:100px;
+  background:transparent; color:var(--danger);
+  font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer;
+  transition:background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
-.empty-trash-btn:hover{ background:var(--surface-2); }
+.empty-trash-btn svg{ width:16px; height:16px; flex:none; }
+.empty-trash-btn:hover{ background:var(--danger); border-color:var(--danger); color:#fff; }
+.empty-trash-btn:hover .empty-trash-count{ background:rgba(255,255,255,.22); color:#fff; }
+/* The count as a quiet pill, so the button reads as one thing rather than a
+   label with a number bolted onto it. */
+.empty-trash-count{
+  min-width:20px; padding:1px 6px; border-radius:100px;
+  background:var(--surface-2); color:var(--text-dim);
+  font-size:12px; font-weight:600; text-align:center;
+  transition:background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
 
 .notes-grid{
   display:grid;
