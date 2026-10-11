@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD_ID = '2026-10-04.5';
+const BUILD_ID = '2026-10-11.1';
 console.log('NoteKeep build', BUILD_ID);
 
 // Upper bound on checklist rows drawn into a card preview. Keep this at or
@@ -743,6 +743,10 @@ function setView(v) {
   clearSearchBtn.classList.add('hidden');
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === v.type));
   sidebar.classList.remove('open'); sidebarScrim.classList.remove('show');
+  // VIEW has just changed, so the composer's draft needs re-seeding for the
+  // label now open. Clicking away to get here already committed anything that
+  // was half-written, so this discards nothing.
+  resetComposer();
   render();
 }
 
@@ -838,8 +842,17 @@ let draft = { type: 'text', color: 'default', items: [], pinned: false, labels: 
 const composerPinBtn = document.getElementById('composerPinBtn');
 const composerArchiveBtn = document.getElementById('composerArchiveBtn');
 
+// A note started while a label is open belongs to that label — the same way
+// Keep does it, and the same way a note started in Archive would be archived.
+// Without this you had to open the new note and add the label by hand, which
+// is most of the reason to be in a label view in the first place.
+function currentViewLabels() {
+  if (VIEW.type !== 'label' || !VIEW.labelId) return [];
+  return DATA.labels.some((l) => l.id === VIEW.labelId) ? [VIEW.labelId] : [];
+}
+
 function resetComposer() {
-  draft = { type: 'text', color: 'default', items: [], pinned: false, labels: [], archived: false };
+  draft = { type: 'text', color: 'default', items: [], pinned: false, labels: currentViewLabels(), archived: false };
   composerTitle.value = '';
   composerBody.value = '';
   composerBody.style.height = 'auto';
@@ -850,6 +863,31 @@ function resetComposer() {
   composerActions.classList.add('hidden');
   composerPinBtn.classList.remove('on');
   composerArchiveBtn.classList.remove('on');
+  renderComposerLabels();
+}
+
+// The composer had nowhere to show its labels, so one added here — otherwise
+// the label attached above is invisible until after the note is saved, and you
+// cannot tell it happened or take it off again.
+const composerLabels = document.createElement('div');
+composerLabels.className = 'composer-labels';
+composerChecklist.insertAdjacentElement('afterend', composerLabels);
+
+function renderComposerLabels() {
+  composerLabels.innerHTML = draft.labels.map((id) => {
+    const l = DATA.labels.find((x) => x.id === id);
+    if (!l) return '';
+    return `<span class="editor-label-chip" data-id="${id}">${escapeHtml(l.name)}<button data-remove="${id}" title="Remove label"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></span>`;
+  }).join('');
+  composerLabels.classList.toggle('hidden', !composerLabels.innerHTML);
+  composerLabels.querySelectorAll('[data-remove]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const i = draft.labels.indexOf(btn.dataset.remove);
+      if (i >= 0) draft.labels.splice(i, 1);
+      renderComposerLabels();
+    });
+  });
 }
 composerPinBtn.addEventListener('click', () => { draft.pinned = !draft.pinned; composerPinBtn.classList.toggle('on', draft.pinned); });
 composerArchiveBtn.addEventListener('click', () => { draft.archived = !draft.archived; composerArchiveBtn.classList.toggle('on', draft.archived); });
@@ -1389,6 +1427,7 @@ function toggleLabelOnTarget(labelId) {
   if (labelTarget === 'composer') {
     const i = draft.labels.indexOf(labelId);
     if (i >= 0) draft.labels.splice(i, 1); else draft.labels.push(labelId);
+    renderComposerLabels();
   } else {
     toggleNoteLabel(labelTarget, labelId);
   }

@@ -13,7 +13,7 @@
      stylesheet and script from different deploys — a mismatch has three
      times now presented as a mystery bug (unstyled controls, a light
      theme, "everything is broken") rather than as what it is. */
-  --build:"2026-10-04.5";
+  --build:"2026-10-11.1";
   --bg:#F2EFE9;
   --surface:#FFFFFF;
   --surface-2:#EDEAE3;
@@ -503,6 +503,9 @@ html.editor-open, body.editor-open{ overflow:hidden; }
 .add-item-btn{ align-self:flex-start; margin:6px 0 2px -8px; color:var(--text-dim); }
 
 .editor-labels{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+/* Same chips as the editor's, so a label looks the same before and after the
+   note exists. */
+.composer-labels{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
 .editor-label-chip{ display:flex; align-items:center; gap:5px; font-size:12px; padding:4px 6px 4px 10px; border-radius:100px; background:var(--surface-2); }
 .editor-label-chip button{ border:none; background:transparent; color:var(--text-dim); cursor:pointer; display:flex; }
 .editor-label-chip button svg{ width:12px; height:12px; }
